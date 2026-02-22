@@ -1,0 +1,29 @@
+# services.yaml per l'integrazione domo
+security_panel_action:
+  name: Security Panel Action
+  description: Esegue azioni sul pannello di sicurezza (reset memoria, silenzia sirene)
+  fields:
+    entity_id:
+      name: Entity ID
+      description: ID dell'entità del pannello di sicurezza
+      required: true
+      selector:
+        entity:
+          domain: alarm_control_panel
+          integration: domo
+    action:
+      name: Action
+      description: Azione da eseguire (reset_event_memory o silence)
+      required: true
+      selector:
+        select:
+          options:
+            - "reset_event_memory"
+            - "silence"
+    code:
+      name: Code
+      description: Codice di sicurezza
+      required: true
+      selector:
+        text:
+          type: password

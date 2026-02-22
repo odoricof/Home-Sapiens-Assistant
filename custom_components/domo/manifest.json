@@ -1,0 +1,10 @@
+{
+  "domain": "domo",
+  "name": "Homesapiens interface",
+  "version": "0.1.0",
+  "requirements": ["aiohttp"],
+  "dependencies": [],
+  "codeowners": [],
+  "config_flow": true,
+  "iot_class": "local_polling"
+}

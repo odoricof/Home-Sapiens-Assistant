@@ -1,0 +1,15 @@
+{
+  "name": "",
+  "domain": "",
+  "documentation": "",
+  "codeowners": ["@odoricof"],
+  "version": "0.1.0",
+  "requirements": [],
+  "iot_class": "local_polling",
+  "hacs": "1.6.0",
+  "homeassistant": "0.118",
+  "domains": [
+    "alarm_control_panel",
+  ]
+}
+
