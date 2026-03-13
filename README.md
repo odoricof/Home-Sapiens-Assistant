@@ -1,23 +1,24 @@
 # Integrazione Home-Sapiens-Assistant
 
-## Panoramica
-Questa integrazione personalizzata fornisce un'interfaccia tra **Home Assistant** e la **pagina web Homesapiens** esposta da ETI/domo.
+## Italiano
 
-L'integrazione interagisce con il sistema riproducendo le stesse richieste HTTP utilizzate dall'interfaccia web ufficiale, consentendo a Home Assistant di leggere gli stati dei dispositivi e inviare comandi all'impianto ETI/Domo.
+### Panoramica
+Questa integrazione personalizzata fornisce un'interfaccia tra **Home Assistant** e la **pagina web Home Sapiens** esposta da ETI/Domo.
 
-## Metodo di sviluppo
-Questo progetto è stato sviluppato tramite **reverse engineering** dell'interfaccia web Homesapiens.
+L'integrazione interagisce con il sistema riproducendo le stesse richieste HTTP utilizzate dall'interfaccia web ufficiale, consentendo a Home Assistant di leggere gli stati dei dispositivi e inviare comandi a ETI/Domo.
 
-Il protocollo di comunicazione è stato analizzato osservando il traffico HTTP generato dall'interfaccia web utilizzando strumenti come **mitmproxy**, i **developer tools del browser** e agenti AI.  
+### Metodo di sviluppo
+Questo progetto è stato sviluppato tramite **reverse engineering** dell'interfaccia web Home Sapiens.
+
+Il protocollo di comunicazione è stato analizzato osservando il traffico HTTP generato dall'interfaccia web utilizzando strumenti come **mitmproxy**, i **developer tools del browser** e **agenti AI**.  
 I comandi e le risposte utilizzati dall'integrazione sono stati ricavati analizzando gli scambi HTTP in chiaro osservabili durante queste sessioni.
 
-
-## Disclaimer
-Questo progetto è una **integrazione indipendente sviluppata dall'autore**, realizzata a **livello amatoriale** e sviluppata interamente in autonomia.
+### Disclaimer
+Questo progetto è una **integrazione indipendente sviluppata da [odoricof](https://github.com/odoricof)**, realizzata a **livello amatoriale** interamente in autonomia.
 
 Non è **affiliata, supportata o approvata dal produttore di ETI/Domo**.
 
-Poiché l'integrazione si basa sull'analisi del protocollo di comunicazione dell'interfaccia Homesapiens:
+Poiché l'integrazione si basa sull'analisi del protocollo di comunicazione dell'interfaccia Home Sapiens:
 
 - la compatibilità con tutte le versioni firmware non può essere garantita;
 - potrebbero verificarsi comportamenti imprevisti;
@@ -27,9 +28,20 @@ L'autore **non si assume alcuna responsabilità per eventuali malfunzionamenti, 
 
 Per la **configurazione, gestione e manutenzione dell'impianto**, si raccomanda di utilizzare sempre gli **strumenti ufficiali forniti dal produttore**.
 
-## Funzionalità attualmente supportate
+### Licenza
+Questo progetto è rilasciato sotto la licenza **MIT**.  
+È permesso utilizzare, modificare e ridistribuire il software, a condizione che:
 
-L'integrazione supporta attualmente i seguenti componenti del sistema ETI/Domo:
+- venga mantenuto il copyright originale;
+- venga incluso il testo della licenza MIT originale in tutte le copie o porzioni significative del software.
+
+Per il testo completo della licenza MIT, consultare: https://opensource.org/licenses/MIT
+
+### Stato del progetto
+Il progetto è in evoluzione e nuove funzionalità potrebbero essere aggiunte in futuro man mano che l'analisi del protocollo procede.
+
+### Funzionalità attualmente supportate
+L'integrazione supporta attualmente i seguenti componenti della domotica Home Sapiens:
 
 - **Luci**
 - **Climatizzazione**
@@ -39,34 +51,40 @@ L'integrazione supporta attualmente i seguenti componenti del sistema ETI/Domo:
 - **Misuratori di energia elettrica**
 - **Centrali antifurto**
 
-## Stato del progetto
-Il progetto è in continua evoluzione e nuove funzionalità potrebbero essere aggiunte in futuro man mano che l'analisi del protocollo procede.
+### Installazione
+È possibile installare l'integrazione in due modi:
+
+1. **Tramite HACS**  
+   - Aggiungere il repository personalizzato HACS: `https://github.com/odoricof/Home-Sapiens-Assistant`  
+   - Cercare “Home-Sapiens-Assistant” e installare direttamente.
+
+2. **Manuale**  
+   - Scaricare o clonare il repository.  
+   - Copiare la cartella `domo` in `config/custom_components/` della tua installazione Home Assistant.  
+   - Riavviare Home Assistant.  
 
 
+---
 
---------------------
+## English
 
+### Overview
+This custom integration provides an interface between **Home Assistant** and the **Home Sapiens web page** exposed by ETI/Domo.
 
+The integration interacts with the system by reproducing the same HTTP requests used by the official web interface, allowing Home Assistant to read device states and send commands to ETI/Domo.
 
-# Home-Sapiens-Assistant Integration
-
-## Overview
-This custom integration provides an interface between **Home Assistant** and the **Homesapiens web page** exposed by ETI/Domo.
-
-The integration interacts with the system by reproducing the same HTTP requests used by the official web interface, allowing Home Assistant to read device states and send commands to the ETI/Domo system.
-
-## Development Method
-This project has been developed through **reverse engineering** of the Homesapiens web interface.
+### Development Method
+This project has been developed through **reverse engineering** of the Home Sapiens web interface.
 
 The communication protocol was analyzed by observing the HTTP traffic generated by the web interface using tools such as **mitmproxy**, **browser developer tools**, and AI agents.  
 The commands and responses used by the integration were derived by analyzing the clear-text HTTP exchanges observable during these sessions.
 
-## Disclaimer
-This project is an **independent integration developed by the author**, created at an **amateur level** and developed entirely autonomously.
+### Disclaimer
+This project is an **independent integration developed by [odoricof](https://github.com/odoricof)**, created at an **amateur level** entirely autonomously.
 
 It is **not affiliated with, supported by, or approved by the manufacturer of ETI/Domo**.
 
-Since the integration is based on the analysis of the Homesapiens interface communication protocol:
+Since the integration relies on analyzing the Home Sapiens communication protocol:
 
 - compatibility with all firmware versions cannot be guaranteed;
 - unexpected behavior may occur;
@@ -76,9 +94,20 @@ The author **assumes no responsibility for any malfunctions, damages, or incompa
 
 For the **configuration, management, and maintenance of the system**, it is recommended to always use the **official tools provided by the manufacturer**.
 
-## Currently Supported Features
+### License
+This project is released under the **MIT License**.  
+You are permitted to use, modify, and redistribute the software, provided that:
 
-The integration currently supports the following components of the ETI/Domo system:
+- the original copyright notice is retained;
+- the original MIT license text is included in all copies or substantial portions of the software.
+
+For the full MIT license text, see: https://opensource.org/licenses/MIT
+
+### Project Status
+The project is evolving and new features may be added in the future as the protocol analysis progresses.
+
+### Currently Supported Features
+The integration currently supports the following components of the Home Sapiens domotics:
 
 - **Lights**
 - **Climate control**
@@ -88,5 +117,14 @@ The integration currently supports the following components of the ETI/Domo syst
 - **Electric energy meters**
 - **Intrusion alarm panels**
 
-## Project Status
-The project is continuously evolving and new features may be added in the future as the protocol analysis progresses.
+### Installation
+The integration can be installed in two ways:
+
+1. **Via HACS**  
+   - Add the custom HACS repository: `https://github.com/odoricof/Home-Sapiens-Assistant`  
+   - Search for “Home-Sapiens-Assistant” and install directly.
+
+2. **Manual installation**  
+   - Download or clone the repository.  
+   - Copy the `domo` folder into `config/custom_components/` in your Home Assistant installation.  
+   - Restart Home Assistant.
