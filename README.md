@@ -1,65 +1,92 @@
-# Camedomotic
+# Integrazione Home-Sapiens-Assistant
 
-## Italiano
+## Panoramica
+Questa integrazione personalizzata fornisce un'interfaccia tra **Home Assistant** e la **pagina web Homesapiens** esposta da ETI/domo.
 
-Integrazione custom di Home Assistant per interfacciarsi con la webpage Home Sapiens esposta da ETI/DOMO, con supporto delle centrali antifurto.  
+L'integrazione interagisce con il sistema riproducendo le stesse richieste HTTP utilizzate dall'interfaccia web ufficiale, consentendo a Home Assistant di leggere gli stati dei dispositivi e inviare comandi all'impianto ETI/Domo.
 
+## Metodo di sviluppo
+Questo progetto è stato sviluppato tramite **reverse engineering** dell'interfaccia web Homesapiens.
 
-### Funzionalità
-
-- In fase di sviluppo: luci, ingressi digitali, relè, coperture, sensori energia, termostati, scenari.  
-- Gestione totale della centrale antifurto Proxinet 36.  
-- servizio RTC per sincronizzazione giornaliera dell'orologio della centrale.  
-- Logger eventi centrale predisposto per esportazione in CSV.
-
-
-### Installazione
-
-Copia la cartella `domo` nella directory `custom_components/` di Home Assistant, poi riavvia HA.  
-Puoi anche installarla tramite HACS dal repository: https://github.com/odoricof/Home-Sapiens-Assistant
-
-### Configurazione
-
-Inserire in UI i seguenti dati:  
-- host: Indirizzo IP di ETI/Domo  
-- nome utente: lo stesso che usi per accedere alla pagina web Homesapiens  
-- password: la stessa che usi per accedere alla pagina web Homesapiens  
-
-In "Configura", immettere l'indirizzo IP della centrale Proxinet per attivare il servizio RTC
-
-### Licenza
-
-Consultare il file LICENSE.
-
----
-
-## English
-
-Custom Home Assistant integration to interface with the Home Sapiens webpage exposed by ETI/DOMO, with support for burglar alarm control panels.  
+Il protocollo di comunicazione è stato analizzato osservando il traffico HTTP generato dall'interfaccia web utilizzando strumenti come **mitmproxy**, i **developer tools del browser** e agenti AI.  
+I comandi e le risposte utilizzati dall'integrazione sono stati ricavati analizzando gli scambi HTTP in chiaro osservabili durante queste sessioni.
 
 
-### Features
+## Disclaimer
+Questo progetto è una **integrazione indipendente sviluppata dall'autore**, realizzata a **livello amatoriale** e sviluppata interamente in autonomia.
 
-- Work in progress: Lights, digital inputs, relays, covers, energy sensors, thermostats, scenarios.  
-- Full management of the Proxinet 36 alarm panel.  
-- RTC service for daily synchronization of the alarm panel clock.  
-- Central event logger ready for CSV export.
+Non è **affiliata, supportata o approvata dal produttore di ETI/Domo**.
 
-### Installation
+Poiché l'integrazione si basa sull'analisi del protocollo di comunicazione dell'interfaccia Homesapiens:
 
-Copy the `domo` folder to your Home Assistant `custom_components/` directory, then restart HA.  
-You can also install it via HACS from the repository: https://github.com/odoricof/Home-Sapiens-Assistant
+- la compatibilità con tutte le versioni firmware non può essere garantita;
+- potrebbero verificarsi comportamenti imprevisti;
+- eventuali aggiornamenti firmware del produttore potrebbero rendere l'integrazione non funzionante.
 
-### Configuration
+L'autore **non si assume alcuna responsabilità per eventuali malfunzionamenti, danni o incompatibilità** derivanti dall'utilizzo di questa integrazione.
 
-In the UI, enter the following data:  
-- Host: IP address of ETI/Domo  
-- Username: same used to log into the Homesapiens web page  
-- Password: same used to log into the Homesapiens web page  
+Per la **configurazione, gestione e manutenzione dell'impianto**, si raccomanda di utilizzare sempre gli **strumenti ufficiali forniti dal produttore**.
 
-In “Configure”, enter the IP address of the Proxinet alarm panel.
+## Funzionalità attualmente supportate
 
-### License
+L'integrazione supporta attualmente i seguenti componenti del sistema ETI/Domo:
 
-See the LICENSE file.
+- **Luci**
+- **Climatizzazione**
+- **Fan coil**
+- **Ingressi digitali**
+- **Scenari**
+- **Misuratori di energia elettrica**
+- **Centrali antifurto**
 
+## Stato del progetto
+Il progetto è in continua evoluzione e nuove funzionalità potrebbero essere aggiunte in futuro man mano che l'analisi del protocollo procede.
+
+
+
+--------------------
+
+
+
+# Home-Sapiens-Assistant Integration
+
+## Overview
+This custom integration provides an interface between **Home Assistant** and the **Homesapiens web page** exposed by ETI/Domo.
+
+The integration interacts with the system by reproducing the same HTTP requests used by the official web interface, allowing Home Assistant to read device states and send commands to the ETI/Domo system.
+
+## Development Method
+This project has been developed through **reverse engineering** of the Homesapiens web interface.
+
+The communication protocol was analyzed by observing the HTTP traffic generated by the web interface using tools such as **mitmproxy**, **browser developer tools**, and AI agents.  
+The commands and responses used by the integration were derived by analyzing the clear-text HTTP exchanges observable during these sessions.
+
+## Disclaimer
+This project is an **independent integration developed by the author**, created at an **amateur level** and developed entirely autonomously.
+
+It is **not affiliated with, supported by, or approved by the manufacturer of ETI/Domo**.
+
+Since the integration is based on the analysis of the Homesapiens interface communication protocol:
+
+- compatibility with all firmware versions cannot be guaranteed;
+- unexpected behavior may occur;
+- future firmware updates from the manufacturer may cause the integration to stop working.
+
+The author **assumes no responsibility for any malfunctions, damages, or incompatibilities** resulting from the use of this integration.
+
+For the **configuration, management, and maintenance of the system**, it is recommended to always use the **official tools provided by the manufacturer**.
+
+## Currently Supported Features
+
+The integration currently supports the following components of the ETI/Domo system:
+
+- **Lights**
+- **Climate control**
+- **Fan coil**
+- **Digital inputs**
+- **Scenes**
+- **Electric energy meters**
+- **Intrusion alarm panels**
+
+## Project Status
+The project is continuously evolving and new features may be added in the future as the protocol analysis progresses.
