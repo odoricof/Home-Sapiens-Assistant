@@ -69,7 +69,9 @@ class SecurityEventsLogger:
             self._handle_update,
         )
 
-    def _handle_update(self):
+    def _handle_update(self, entity_id: str = None):
+        if entity_id is not None and entity_id != "security_central":
+            return
         central = get_security_device()
         if not central:
             return

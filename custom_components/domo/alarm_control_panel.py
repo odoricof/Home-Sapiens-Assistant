@@ -1,9 +1,18 @@
 """
-Alarm control panel for ETI Domo security system.
+domo/alarm_control_panel.py
+
+Custom integration: Home-Sapiens-Assistant
+Author: Flavio Odorico (github.com/odoricof)
+License: MIT
+
+This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
+Report any bugs or feature requests via GitHub Issues:
+https://github.com/odoricof/Home-Sapiens-Assistant/issues
 """
 
-import logging
 
+import logging
+import time
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
     AlarmControlPanelState,
@@ -11,6 +20,7 @@ from homeassistant.components.alarm_control_panel import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity import DeviceInfo
 
 from .const import (
     DOMAIN,
@@ -26,6 +36,7 @@ CENTRAL_STATUS_MAP = {
     256: "transizione",
     1024: "ingressi_non_armati_aperti",
     1280: "inserita_con_ingressi_esclusi_aperti",
+    2048: "sconosciuto",
     2304: "violazione",
     3328: "allarme_intrusione",
     4096: "arming_waiting_stabilization",
@@ -41,6 +52,7 @@ CENTRAL_STATUS_MAP = {
 }
 
 AREA_STATUS_MAP = {
+    #proxinet
     32: "non_pronta_con_ingressi_aperti",
     33: "inserimento_con_ingressi_aperti",
     34: "apertura_ingresso_in_attesa_disarmo",
@@ -53,6 +65,15 @@ AREA_STATUS_MAP = {
     44: "memoria_allarme",
     96: "ingressi_aperti_e_ingressi_esclusi",
     104: "pronta_con_ingressi_esclusi",
+    
+    #pxc
+    48: "non_pronta_con_ingressi_aperti",
+    56: "pronta_con_ingressi_chiusi",
+    58: "inserita",
+    60: "memoria_allarme",
+    182: "allarme_intrusione_in_corso",
+    190: "sconosciuto",
+
 }
 
 INPUT_STATUS_MAP = {
@@ -77,32 +98,19 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     hass.data[DOMAIN].setdefault("_security_panel_added", False)
 
-    @callback
-    def _on_security_discovered(dev_ids):
-        if hass.data[DOMAIN]["_security_panel_added"]:
-            return
-
-        # Import DENTRO la funzione per evitare circular import
-        from .platforms.sicu import get_security_device
-        
-        security = get_security_device()
-        if not security:
-            return
-
+    # 🔴 NON ASPETTIAMO PIÙ IL SEGNALE - CREIAMO SUBITO L'ENTITÀ SE DISPONIBILE
+    from .platforms.sicu import get_security_device
+    
+    security = get_security_device()
+    if security and not hass.data[DOMAIN]["_security_panel_added"]:
         _LOGGER.info(
-            "SECURITY central found, creating alarm panel | name=%s",
+            "SECURITY central already available, creating alarm panel | name=%s",
             security.name,
         )
-
         async_add_entities([DomoSecurityCentralEntity(security)])
         hass.data[DOMAIN]["_security_panel_added"] = True
-
-    # ascolta SOLO la discovery della centrale
-    async_dispatcher_connect(
-        hass,
-        SIGNAL_DISCOVERY_NEW.format(SECURITY_DOMAIN),
-        _on_security_discovered,
-    )
+    else:
+        _LOGGER.debug("SECURITY central not yet available, will be created later")
 
 
 # --------------------------------------------------
@@ -119,8 +127,18 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         self._attr_should_poll = False
         self._last_armed_state = None
         self._alarm_notified = False
-        self._alarm_notification_id = None 
+        self._alarm_notification_id = None
         
+    @property
+    def device_info(self):
+        """Return device information."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, f"central_{self._device.central_id}")},
+            name=self._device.name,
+            manufacturer="Home Sapiens",
+            model=" ",
+        )   
+     
     # --------------------------------------------------
     # FEATURE
     # --------------------------------------------------
@@ -197,7 +215,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         armed_now = {
             a.get("area_id")
             for a in areas
-            if a.get("status") == 42
+            if a.get("status") in [42, 58]
         }
 
         # 3. DISARMED
@@ -268,8 +286,10 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         )
 
     @callback
-    def _handle_update(self):
+    def _handle_update(self, entity_id: str = None):
         """Handle update signal."""
+        if entity_id is not None and entity_id != self._attr_unique_id:
+            return        
         data = getattr(self._device, "_last_snapshot", None)
         if data:
             central = data.get("central", {})
@@ -413,28 +433,32 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
             sensori = [f"{i['name']} (area {i['area']})" for i in violated_inputs]
             msg = f"Sensori violati: {', '.join(sensori)}"
         
-        # 1. Notifica push sul telefono
-        try:
-            await self.hass.services.async_call(
-                "notify",
-                "mobile_app",
-                {
-                    "title": "🚨 ALLARME IN CORSO!",
-                    "message": msg,
-                    "data": {
-                        "priority": "high",
-                        "ttl": 0,
-                        "importance": "max",
-                        "vibrate": [500, 500, 500],
-                        "color": "#FF0000",
-                        "channel": "alarm",
-                        "sound": "alarm.caf"
-                    }
-                },
-                blocking=True
-            )
-        except Exception as err:
-            _LOGGER.error("Failed to send push notification: %s", err)
+        # 1. Notifica push sul telefono (solo se esiste il servizio)
+        if self.hass.services.has_service("notify", "mobile_app"):
+            try:
+                await self.hass.services.async_call(
+                    "notify",
+                    "mobile_app",
+                    {
+                        "title": "🚨 ALLARME IN CORSO!",
+                        "message": msg,
+                        "data": {
+                            "priority": "high",
+                            "ttl": 0,
+                            "importance": "max",
+                            "vibrate": [500, 500, 500],
+                            "color": "#FF0000",
+                            "channel": "alarm",
+                            "sound": "alarm.caf"
+                        }
+                    },
+                    blocking=True
+                )
+            except Exception as err:
+                _LOGGER.error("Failed to send push notification: %s", err)
+        else:
+            _LOGGER.warning("Servizio notify.mobile_app non disponibile, notifica push ignorata")
+    
         
         # 2. Notifica persistente in Home Assistant (con ID fisso)
         self._alarm_notification_id = f"alarm_{int(time.time())}"

@@ -1,3 +1,15 @@
+"""
+domo/gateway.py
+
+Custom integration: Home-Sapiens-Assistant
+Author: Flavio Odorico (github.com/odoricof)
+License: MIT
+
+This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
+Report any bugs or feature requests via GitHub Issues:
+https://github.com/odoricof/Home-Sapiens-Assistant/issues
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -34,7 +46,7 @@ class DomoGateway:
         host: str,
         username: str = DEFAULT_USERNAME,
         password: str = DEFAULT_PASSWORD,
-        poll_interval: float = 2.0,  # MODIFICATO: aumentato a 2 secondi per non sovraccaricare
+        poll_interval: float = 2.0,
     ):
         self.hass = hass
         self.host = host
@@ -89,6 +101,7 @@ class DomoGateway:
 
         self._running = True
         self._task = self.hass.loop.create_task(self._poll_loop())
+        self._task_keep_alive = self.hass.loop.create_task(self._keep_alive_loop())
 
     async def stop(self):
         """Ferma il gateway."""
@@ -96,13 +109,25 @@ class DomoGateway:
 
         self._running = False
 
+        # Cancella loop principale di polling
         if self._task:
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
+            self._task = None
 
+        # Cancella loop di keep-alive
+        if hasattr(self, "_task_keep_alive") and self._task_keep_alive:
+            self._task_keep_alive.cancel()
+            try:
+                await self._task_keep_alive
+            except asyncio.CancelledError:
+                pass
+            self._task_keep_alive = None
+
+        # Chiudi sessione HTTP
         if self._session:
             await self._session.close()
             self._session = None
@@ -120,6 +145,31 @@ class DomoGateway:
                 _LOGGER.error("DOMO rx_status error: %s", err)
                 
             await asyncio.sleep(self.poll_interval)
+
+    # --------------------------------------------------
+    # Keep-alive loop
+    # --------------------------------------------------
+    async def _keep_alive_loop(self):
+        """Invia periodicamente il keep-alive per mantenere attiva la sessione."""
+        while self._running and self._client_id:
+            try:
+                payload = {
+                    "sl_cmd": "sl_keep_alive_req",
+                    "sl_client_id": self._client_id,
+                }
+                resp = await self._post(payload)
+                if resp.get("sl_cmd") == "sl_keep_alive_ack" and resp.get("sl_data_ack_reason") == 0:
+                    self._session_expire_ts = time.monotonic() + self._keep_alive_sec
+                    _LOGGER.debug("DOMO keep-alive ok, next expire at %.1f", self._session_expire_ts)
+                else:
+                    _LOGGER.warning("DOMO keep-alive ack unexpected: %s", resp)
+            except Exception as err:
+                _LOGGER.error("DOMO keep-alive failed: %s", err)
+            await asyncio.sleep(self._keep_alive_sec / 2)
+
+
+
+
 
     # --------------------------------------------------
     # HTTP helpers
@@ -222,8 +272,9 @@ class DomoGateway:
                 self._was_connected = True
                 self.online = True
                 _LOGGER.info("DOMO gateway ONLINE")
-                async_dispatcher_send(self.hass, SIGNAL_GATEWAY_ONLINE)            
-            
+                async_dispatcher_send(self.hass, SIGNAL_GATEWAY_ONLINE)
+                await asyncio.sleep(30) 
+                return
             
             if not resp:
                 _LOGGER.debug("DOMO empty response")
@@ -239,12 +290,12 @@ class DomoGateway:
                 events = resp.get("result", []) or []
                 
                 if events:
-                    _LOGGER.debug("DOMO received %d events", len(events))
+                    _LOGGER.debug("🔁 DOMO received %d events", len(events))
                     
                     for event in events:
                         cmd = event.get("cmd_name", "unknown")
                         _LOGGER.debug(
-                            "DOMO RX cmd_name=%s payload=%s",
+                            "🔁 DOMO RX cmd_name=%s payload=%s",
                             cmd,
                             event,
                         )
@@ -260,9 +311,16 @@ class DomoGateway:
                         
                 else:
                     _LOGGER.debug("DOMO status_update_resp with no events")
-            else:
-                _LOGGER.debug("DOMO unexpected response: cmd_name=%s", cmd_name)
 
+            else:
+                _LOGGER.debug("DOMO unexpected response: cmd_name=%s | resp=%s", cmd_name, resp)
+
+                # se il gateway è ripartito la sessione non è più valida
+                if cmd_name is None:
+                    _LOGGER.warning("DOMO session lost, forcing re-login")
+                    self._session_expire_ts = 0
+                    
+                    
         except asyncio.TimeoutError:
             _LOGGER.debug("DOMO rx_status timeout - no events")
         except aiohttp.ClientConnectorError as err:

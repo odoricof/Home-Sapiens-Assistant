@@ -1,4 +1,14 @@
-"""Config flow for ETI Domo integration."""
+"""
+domo/config_flow.py
+
+Custom integration: Home-Sapiens-Assistant
+Author: Flavio Odorico (github.com/odoricof)
+License: MIT
+
+This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
+Report any bugs or feature requests via GitHub Issues:
+https://github.com/odoricof/Home-Sapiens-Assistant/issues
+"""
 import logging
 import voluptuous as vol
 
@@ -6,14 +16,14 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_USERNAME, CONF_PASSWORD
 from homeassistant.core import callback
 
-from .const import DOMAIN, DEFAULT_HOST, DEFAULT_USERNAME, DEFAULT_PASSWORD
+from .const import DOMAIN, DEFAULT_USERNAME, DEFAULT_PASSWORD
 from .gateway import DomoGateway
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_HOST, default=DEFAULT_HOST): str,
+        vol.Required(CONF_HOST): str,
         vol.Required(CONF_USERNAME, default=DEFAULT_USERNAME): str,
         vol.Required(CONF_PASSWORD, default=DEFAULT_PASSWORD): str,
     }
@@ -117,7 +127,7 @@ class DomoOptionsFlow(config_entries.OptionsFlow):
                 await gateway.stop()
 
         # Pre-popola con i valori esistenti
-        current_host = self._config_entry.data.get(CONF_HOST, DEFAULT_HOST)
+        current_host = self._config_entry.data.get(CONF_HOST)
         current_username = self._config_entry.data.get(CONF_USERNAME, DEFAULT_USERNAME)
         current_password = self._config_entry.data.get(CONF_PASSWORD, DEFAULT_PASSWORD)
 

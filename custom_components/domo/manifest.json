@@ -1,7 +1,7 @@
 {
   "domain": "domo",
-  "name": "Homesapiens interface",
-  "version": "0.1.0",
+  "name": "Home Sapiens interface",
+  "version": "1.0.0",
   "requirements": ["aiohttp"],
   "dependencies": [],
   "codeowners": [],

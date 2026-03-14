@@ -1,13 +1,18 @@
 """
-sicu.py
+domo/platforms/sicu.py
 
-For more details about this platform, please refer to the documentation at
-https://github.com/odoricof/xxx
+Custom integration: Home-Sapiens-Assistant
+Author: Flavio Odorico (github.com/odoricof)
+License: MIT
+
+This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
+Report any bugs or feature requests via GitHub Issues:
+https://github.com/odoricof/Home-Sapiens-Assistant/issues
 """
 
 from __future__ import annotations
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from ..const import DOMAIN, CONF_PENDING, SIGNAL_DISCOVERY_NEW, SIGNAL_UPDATE_ENTITY
+from ..const import DOMAIN, SIGNAL_UPDATE_ENTITY
 import logging
 import threading
 from typing import Dict, Any, Optional
@@ -94,21 +99,7 @@ async def discover_security(gateway):
             await _SECURITY_DEVICE.update(inputs_resp)
         if scenarios_resp:
             await _SECURITY_DEVICE.update(scenarios_resp)
-        
-        # Discovery HA
-        if gateway.hass:
-            domain = "alarm_control_panel"
-            gateway.hass.data[DOMAIN][CONF_PENDING].setdefault(domain, [])
-            gateway.hass.data[DOMAIN][CONF_PENDING][domain].append(
-                _SECURITY_DEVICE.unique_id
-            )
-            gateway.hass.loop.call_soon_threadsafe(
-                async_dispatcher_send,
-                gateway.hass,
-                SIGNAL_DISCOVERY_NEW.format(domain),
-                [_SECURITY_DEVICE.unique_id],
-            )
-        
+            
         return _SECURITY_DEVICE
         
     except Exception as err:
@@ -614,4 +605,3 @@ class SecurityCentral:
 def get_security_device():
     """Return the SECURITY central singleton, if available."""
     return _SECURITY_DEVICE
-
