@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurer le compte local ETI/Domo",
+        "description": "Saisissez l'adresse IP, le nom d'utilisateur et le mot de passe utilisés pour accéder à l'interface web Home Sapiens d'ETI Domo",
+        "data": {
+          "host": "Adresse du serveur (IP)",
+          "username": "Nom d'utilisateur",
+          "password": "Mot de passe"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter au serveur. Vérifiez l'adresse IP, le nom d'utilisateur et le mot de passe."
+    },
+    "abort": {
+      "already_configured": "Ce serveur est déjà configuré"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Modifier le compte local ETI/Domo",
+        "description": "Modifiez l'adresse IP, le nom d'utilisateur et le mot de passe utilisés pour accéder à l'interface web Home Sapiens d'ETI Domo",
+        "data": {
+          "host": "Adresse du serveur (IP)",
+          "username": "Nom d'utilisateur",
+          "password": "Mot de passe"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter avec les nouvelles informations d'identification"
+    }
+  }
+}

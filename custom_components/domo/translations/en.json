@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure local ETI/Domo account",
+        "description": "Enter the IP address, username and password used to access the ETI Domo Home Sapiens web interface",
+        "data": {
+          "host": "Server address (IP)",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the server. Check the IP address, username and password."
+    },
+    "abort": {
+      "already_configured": "This server is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit local ETI/Domo account",
+        "description": "Modify the IP address, username and password used to access the ETI Domo Home Sapiens web interface",
+        "data": {
+          "host": "Server address (IP)",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect using the new credentials"
+    }
+  }
+}

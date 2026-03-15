@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar cuenta local ETI/Domo",
+        "description": "Introduzca la dirección IP, el nombre de usuario y la contraseña utilizados para acceder a la interfaz web Home Sapiens de ETI Domo",
+        "data": {
+          "host": "Dirección del servidor (IP)",
+          "username": "Nombre de usuario",
+          "password": "Contraseña"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se puede conectar al servidor. Verifique la dirección IP, el nombre de usuario y la contraseña."
+    },
+    "abort": {
+      "already_configured": "Este servidor ya está configurado"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Modificar cuenta local ETI/Domo",
+        "description": "Modifique la dirección IP, el nombre de usuario y la contraseña utilizados para acceder a la interfaz web Home Sapiens de ETI Domo",
+        "data": {
+          "host": "Dirección del servidor (IP)",
+          "username": "Nombre de usuario",
+          "password": "Contraseña"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se puede conectar con las nuevas credenciales"
+    }
+  }
+}

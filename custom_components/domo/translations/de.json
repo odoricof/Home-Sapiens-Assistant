@@ -1,0 +1,37 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Lokales ETI/Domo-Konto konfigurieren",
+        "description": "Geben Sie die IP-Adresse, den Benutzernamen und das Passwort ein, die für den Zugriff auf die ETI Domo Home Sapiens Weboberfläche verwendet werden",
+        "data": {
+          "host": "Serveradresse (IP)",
+          "username": "Benutzername",
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Server nicht möglich. Überprüfen Sie IP-Adresse, Benutzername und Passwort."
+    },
+    "abort": {
+      "already_configured": "Dieser Server ist bereits konfiguriert"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Lokales ETI/Domo-Konto bearbeiten",
+        "description": "Ändern Sie die IP-Adresse, den Benutzernamen und das Passwort für den Zugriff auf die ETI Domo Home Sapiens Weboberfläche",
+        "data": {
+          "host": "Serveradresse (IP)",
+          "username": "Benutzername",
+          "password": "Passwort"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung mit den neuen Anmeldedaten nicht möglich"
+    }
+  }
+}
