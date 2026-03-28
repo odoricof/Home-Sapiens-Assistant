@@ -15,8 +15,6 @@ from __future__ import annotations
 import time
 import logging
 
-from typing import Any, Optional
-
 from homeassistant.components.light import (
     LightEntity,
     ColorMode,
@@ -96,6 +94,11 @@ class DomoLightEntity(LightEntity):
             self._attr_color_mode = ColorMode.ONOFF
             self._attr_supported_color_modes = {ColorMode.ONOFF}
         
+        # Inizializza attributi per il tracking dello stato
+        self._awaiting_confirmation = False
+        self._command_ts = 0.0
+        self._expected_state = None
+        
         _LOGGER.debug("Created light entity: %s", self._attr_name)
 
     @property
@@ -104,7 +107,7 @@ class DomoLightEntity(LightEntity):
         return self._light.is_on
 
     @property
-    def brightness(self) -> Optional[int]:
+    def brightness(self) -> int | None:
         """Return the brightness of the light (0-255)."""
         if self._light.light_type == "DIMMER":
             return int(self._light.brightness * 2.55)
@@ -113,14 +116,14 @@ class DomoLightEntity(LightEntity):
         return None
 
     @property
-    def hs_color(self) -> Optional[tuple[float, float]]:
+    def hs_color(self) -> tuple[float, float] | None:
         """Return the hs color value."""
         if self._light.light_type == "rgb":
             return (self._hsv[0], self._hsv[1])
         return None
 
     @property
-    def rgb_color(self) -> Optional[tuple[int, int, int]]:
+    def rgb_color(self) -> tuple[int, int, int] | None:
         """For backward compatibility, convert HSV to RGB."""
         if self._light.light_type == "rgb":
             h, s, v = self._hsv
@@ -129,7 +132,7 @@ class DomoLightEntity(LightEntity):
 
     def _state_matches_expected(self):
         """Verifica se lo stato attuale corrisponde a quello atteso."""
-        if not getattr(self, "_expected_state", None):
+        if self._expected_state is None:
             return True
 
         if self._expected_state["is_on"] != self._light.is_on:
@@ -246,7 +249,7 @@ class DomoLightEntity(LightEntity):
             now = time.monotonic()
 
             # Se stiamo aspettando una conferma
-            if getattr(self, "_awaiting_confirmation", False):
+            if self._awaiting_confirmation:
 
                 # Caso 1: conferma corretta
                 if self._state_matches_expected():

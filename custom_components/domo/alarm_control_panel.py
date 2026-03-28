@@ -22,11 +22,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import (
-    DOMAIN,
-    SIGNAL_DISCOVERY_NEW,
-    SIGNAL_UPDATE_ENTITY,
-)
+from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,7 +35,7 @@ CENTRAL_STATUS_MAP = {
     2048: "sconosciuto",
     2304: "violazione",
     3328: "allarme_intrusione",
-    4096: "arming_waiting_stabilization",
+    4096: "tempo_uscita_con_ingressi_aperti",
     4352: "tempo_uscita_con_aree_aperte",
     8192: "pronta",
     9216: "inserita",
@@ -98,7 +94,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     hass.data[DOMAIN].setdefault("_security_panel_added", False)
 
-    # 🔴 NON ASPETTIAMO PIÙ IL SEGNALE - CREIAMO SUBITO L'ENTITÀ SE DISPONIBILE
     from .platforms.sicu import get_security_device
     
     security = get_security_device()
@@ -208,7 +203,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
             return self._last_valid_state
 
         # 1. ARMING
-        if central_status in (12288, 14336):
+        if central_status in (4096, 4352, 12288, 14336):
             return AlarmControlPanelState.ARMING
 
         # 2. insieme delle aree armate correnti
@@ -433,32 +428,39 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
             sensori = [f"{i['name']} (area {i['area']})" for i in violated_inputs]
             msg = f"Sensori violati: {', '.join(sensori)}"
         
-        # 1. Notifica push sul telefono (solo se esiste il servizio)
-        if self.hass.services.has_service("notify", "mobile_app"):
-            try:
-                await self.hass.services.async_call(
-                    "notify",
-                    "mobile_app",
-                    {
-                        "title": "🚨 ALLARME IN CORSO!",
-                        "message": msg,
-                        "data": {
-                            "priority": "high",
-                            "ttl": 0,
-                            "importance": "max",
-                            "vibrate": [500, 500, 500],
-                            "color": "#FF0000",
-                            "channel": "alarm",
-                            "sound": "alarm.caf"
-                        }
-                    },
-                    blocking=True
-                )
-            except Exception as err:
-                _LOGGER.error("Failed to send push notification: %s", err)
+        # 1. Notifiche push a TUTTI i dispositivi mobile_app
+        # Ottieni tutti i servizi notify.mobile_app_*
+        all_services = self.hass.services.async_services()
+        mobile_app_services = [
+            service for service in all_services.get("notify", [])
+            if service.startswith("mobile_app_")
+        ]
+        
+        if mobile_app_services:
+            for service in mobile_app_services:
+                try:
+                    await self.hass.services.async_call(
+                        "notify",
+                        service,
+                        {
+                            "title": "🚨 ALLARME IN CORSO!",
+                            "message": msg,
+                            "data": {
+                                "priority": "high",
+                                "ttl": 0,
+                                "importance": "max",
+                                "vibrate": [500, 500, 500],
+                                "color": "#FF0000",
+                                "channel": "alarm",
+                                "sound": "alarm.caf"
+                            }
+                        },
+                        blocking=False  # non bloccare per inviare a più dispositivi
+                    )
+                except Exception as err:
+                    _LOGGER.error("Failed to send push notification to %s: %s", service, err)
         else:
-            _LOGGER.warning("Servizio notify.mobile_app non disponibile, notifica push ignorata")
-    
+            _LOGGER.warning("Nessun dispositivo mobile_app registrato, notifiche push ignorate")
         
         # 2. Notifica persistente in Home Assistant (con ID fisso)
         self._alarm_notification_id = f"alarm_{int(time.time())}"

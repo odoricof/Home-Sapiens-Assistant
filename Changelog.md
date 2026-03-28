@@ -8,7 +8,7 @@ Tutte le modifiche rilevanti di questo progetto verranno documentate in questo f
 
 ### Aggiunto
 - Prima release pubblica dell'integrazione **DOMO per Home Assistant**
-- Gateway di comunicazione con ETI/Domo tramite l'interfaccia web **Homesapiens**
+- Gateway di comunicazione con ETI/Domo tramite l'interfaccia web **Home Sapiens**
 
 ### Piattaforme supportate
 - Luci
@@ -33,7 +33,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Initial public release of the **DOMO integration for Home Assistant**
-- Gateway of communication with ETI/Domo systems through the **Homesapiens web interface**
+- Gateway of communication with ETI/Domo systems through the **Home Sapiens web interface**
 
 ### Supported platforms
 - Lights

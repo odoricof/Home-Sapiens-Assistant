@@ -34,4 +34,5 @@ PLATFORMS = [
     "climate",
     "sensor",
     "scene",
+    "switch",
 ]

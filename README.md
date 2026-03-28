@@ -49,6 +49,7 @@ L'integrazione supporta attualmente i seguenti componenti della domotica Home Sa
 - **Ingressi digitali**
 - **Scenari**
 - **Misuratori di energia elettrica**
+- **Attivazioni**
 - **Centrali antifurto**
 
 ### Installazione
@@ -115,6 +116,7 @@ The integration currently supports the following components of the Home Sapiens 
 - **Digital inputs**
 - **Scenes**
 - **Electric energy meters**
+- **Activations**
 - **Intrusion alarm panels**
 
 ### Installation

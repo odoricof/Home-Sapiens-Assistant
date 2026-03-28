@@ -232,7 +232,7 @@ class DomoGateway:
             raise RuntimeError(f"DOMO login failed, ack={ack}")
 
         self._client_id = resp.get("sl_client_id", "")
-        self._keep_alive_sec = resp.get("sl_keep_alive_timeout_sec", 60)  # MODIFICATO: default 60 se non fornito
+        self._keep_alive_sec = resp.get("sl_keep_alive_timeout_sec", 60)
         self._session_expire_ts = time.monotonic() + self._keep_alive_sec
 
         _LOGGER.info(
@@ -240,7 +240,7 @@ class DomoGateway:
             self._client_id,
             self._keep_alive_sec,
         )
-
+        
     def _session_valid(self) -> bool:
         return bool(self._client_id) and time.monotonic() < self._session_expire_ts
 
@@ -274,10 +274,6 @@ class DomoGateway:
                 _LOGGER.info("DOMO gateway ONLINE")
                 async_dispatcher_send(self.hass, SIGNAL_GATEWAY_ONLINE)
                 await asyncio.sleep(30) 
-                return
-            
-            if not resp:
-                _LOGGER.debug("DOMO empty response")
                 return
                 
             cmd_name = resp.get("cmd_name")
@@ -339,7 +335,9 @@ class DomoGateway:
     # --------------------------------------------------            
             
     async def tx_command(self, payload: dict, resp_command: str | None = None) -> dict | None:
+        _LOGGER.info(">>> GATEWAY tx_command ENTERED with payload: %s", payload.get("cmd_name"))
         if not self._session_valid():
+            _LOGGER.info(">>> Session invalid, logging in...")
             await self._login()
 
         request_payload = {
@@ -350,6 +348,7 @@ class DomoGateway:
         }
 
         _LOGGER.debug("DOMO tx_command: %s", payload.get("cmd_name"))
+        _LOGGER.info(">>> GATEWAY sending request: %s", request_payload)
        
         
 
@@ -367,7 +366,7 @@ class DomoGateway:
             return resp
         
         except Exception as err:
-            _LOGGER.error("DOMO tx_command failed: %s", err)
+            _LOGGER.error("DOMO tx_command failed: %s - %s", type(err).__name__, err)
             return None         
 
 

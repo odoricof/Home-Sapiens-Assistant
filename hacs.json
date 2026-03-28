@@ -9,7 +9,7 @@
   "hacs": "1.6.0",
   "homeassistant": "0.118",
   "domains": [
-    "alarm_control_panel",
+    "alarm_control_panel"
   ]
 }
 

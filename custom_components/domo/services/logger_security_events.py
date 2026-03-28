@@ -1,8 +1,13 @@
 """
-Security events logger Proxinet.
+services/logger_security_events.py
 
-For more details about this platform, please refer to the documentation at
-https://github.com/odoricof/xxx
+Custom integration: Home-Sapiens-Assistant
+Author: Flavio Odorico (github.com/odoricof)
+License: MIT
+
+This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
+Report any bugs or feature requests via GitHub Issues:
+https://github.com/odoricof/Home-Sapiens-Assistant/issues
 """
 
 from __future__ import annotations

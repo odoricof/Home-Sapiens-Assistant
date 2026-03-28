@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional, List
 
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from ..const import DOMAIN, SIGNAL_UPDATE_ENTITY
+from ..const import SIGNAL_UPDATE_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,17 +47,6 @@ async def discover_thermostats(gateway):
             _LOGGER.error("THERMOSTATS discovery: no response")
             return None
         
-        # Estrai umidità globale se presente
-        global_humidity = None
-        if "humidity" in resp:
-            global_humidity = {
-                "act_id": resp["humidity"].get("act_id"),
-                "value": resp["humidity"].get("value"),
-                "name": resp["humidity"].get("name"),
-                "unit": resp["humidity"].get("unit", "%")
-            }
-            _LOGGER.debug("Global humidity sensor found: %s", global_humidity)
-        
         # Parsing della struttura annidata
         thermostats_found = []
         for zone in resp.get("array", []):
@@ -70,8 +59,7 @@ async def discover_thermostats(gateway):
                         gateway,
                         thermo,
                         zone_name,
-                        thermo.get("name"),
-                        global_humidity
+                        thermo.get("name")
                     )
                     _THERMOSTATS[thermo.get("act_id")] = thermo_obj
                     thermostats_found.append(thermo_obj)
@@ -97,7 +85,7 @@ def get_all_thermostats() -> List["DomoThermostat"]:
 
 class DomoThermostat:
 
-    def __init__(self, gateway, thermo_data: Dict[str, Any], zone: str, room: str, global_humidity: Optional[Dict] = None):
+    def __init__(self, gateway, thermo_data: Dict[str, Any], zone: str, room: str):
         """Inizializza il termostato."""
         self._gateway = gateway
         
@@ -113,7 +101,6 @@ class DomoThermostat:
         
         self._zone = zone
         self._room = room
-        self._global_humidity = global_humidity
         
         # Dati aggiuntivi
         self._hygro = thermo_data.get("hygro")
@@ -162,9 +149,11 @@ class DomoThermostat:
     def current_humidity(self) -> Optional[float]:
         """Restituisce l'umidità corrente se disponibile."""
         if self._hygro is not None:
-            return float(self._hygro)
-        if self._global_humidity:
-            return float(self._global_humidity.get("value", 0))
+            try:
+                return float(self._hygro)
+            except (ValueError, TypeError):
+                _LOGGER.debug("Invalid hygro value for %s: %s", self.name, self._hygro)
+                return None
         return None
 
     @property

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
 from typing import Any, Dict, List
 
 from homeassistant.components.scene import BaseScene
@@ -22,8 +21,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.util import dt as dt_util
-from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
+from .const import DOMAIN
 from .platforms.scenarios import DomoScenarioDevice, get_scenario_device
 
 _LOGGER = logging.getLogger(__name__)
@@ -44,11 +42,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     
     existing_entities = hass.data[DOMAIN]["domo_scenarios"]
     
-    def create_new_entities(scenarios: List[Dict[str, Any]], entry_id: str) -> List[Scene]:
+    def create_new_entities(scenario_list: List[Dict[str, Any]], entry_id: str) -> List['DomoScenarioEntity']:
         """Crea nuove entità per scenari non ancora registrati."""
-        entities = []
+        new_entities = []
         
-        for scenario in scenarios:
+        for scenario in scenario_list:
             # Normalizza il campo user_defined (può arrivare come user_defined o user-defined)
             scenario["user_defined"] = scenario.get("user_defined", scenario.get("user-defined", 0))
             
@@ -63,20 +61,20 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
             if entity is None or entity.hass is None:
                 entity = DomoScenarioEntity(scenario, scenario_device, entry_id)
                 existing_entities[scenario_id] = entity
-                entities.append(entity)
+                new_entities.append(entity)
                 _LOGGER.debug(
                     "Created new scenario entity: %s (ID: %d, User defined: %s)",
                     scenario.get("name"), scenario_id, scenario.get("user_defined")
                 )
         
-        return entities
+        return new_entities
     
     # Carica gli scenari iniziali
-    scenarios = await scenario_device.available_scenarios()
-    _LOGGER.debug("Initial setup: loaded %d scenarios", len(scenarios))
+    initial_scenarios = await scenario_device.available_scenarios()
+    _LOGGER.debug("Initial setup: loaded %d scenarios", len(initial_scenarios))
     
-    entities = create_new_entities(scenarios, config_entry.entry_id)
-    async_add_entities(entities)
+    new_entities = create_new_entities(initial_scenarios, config_entry.entry_id)
+    async_add_entities(new_entities)
     
     # Funzione per gestire il refresh della lista scenari
     async def handle_refresh_scenarios():
@@ -84,11 +82,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         _LOGGER.debug("Received scenarios refresh event")
         
         # Ricarica la lista scenari - chiamata diretta async
-        scenarios = await scenario_device.available_scenarios()
+        updated_scenarios = await scenario_device.available_scenarios()
         
         # IDs correnti e nuovi
         existing_ids = set(existing_entities.keys())
-        current_ids = set(s["id"] for s in scenarios if s.get("id") is not None)
+        current_ids = set(s["id"] for s in updated_scenarios if s.get("id") is not None)
         
         # Rimuovi entità obsolete
         removed_ids = existing_ids - current_ids
@@ -112,17 +110,17 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
                 _LOGGER.debug("Removed scenario %d from registry", rid)
         
         # Aggiungi nuove entità
-        new_entities = create_new_entities(scenarios, config_entry.entry_id)
+        new_entities = create_new_entities(updated_scenarios, config_entry.entry_id)
         if new_entities:
             _LOGGER.debug("Adding %d new scenario entities", len(new_entities))
             async_add_entities(new_entities, update_before_add=True)
         
         # Aggiorna le entità esistenti
-        for scenario in scenarios:
+        for scenario in updated_scenarios:
             sid = scenario.get("id")
             if sid in existing_ids:
                 entity = existing_entities[sid]
-                old_name = entity._attr_name
+                old_name = entity.name
                 entity._scenario = scenario
                 entity._attr_name = scenario.get("name", "Unknown Scenario")
                 entity._attr_unique_id = f"scene.domo_scenario_{sid}"
@@ -143,7 +141,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     async_dispatcher_connect(hass, "domo_scenarios_refreshed", _dispatcher_handler)
 
 
-class DomoScenarioEntity(BaseScene):  # eredita da BaseScene
+class DomoScenarioEntity(BaseScene):
     """Rappresentazione di uno scenario Domo."""
 
     def __init__(self, scenario: Dict[str, Any], scenario_device: DomoScenarioDevice, entry_id: str):
@@ -205,7 +203,6 @@ class DomoScenarioEntity(BaseScene):  # eredita da BaseScene
         if self._unsub:
             self._unsub()
             self._unsub = None
-
 
 
     @property

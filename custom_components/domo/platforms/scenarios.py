@@ -12,10 +12,10 @@ https://github.com/odoricof/Home-Sapiens-Assistant/issues
 from __future__ import annotations
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-
+ 
 from ..const import SIGNAL_UPDATE_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
@@ -100,11 +100,6 @@ class DomoScenarioDevice:
         if success:
             _LOGGER.debug("Deleted scenario %d", scenario_id)
         return success
-
-    def update_state(self, data: Dict[str, Any]) -> bool:
-        """Aggiorna lo stato del device scenari (non usato)."""
-        return False
-
 
 async def discover_scenarios(gateway):
     """Scopri il device scenari."""

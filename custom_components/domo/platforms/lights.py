@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional, List
 
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from ..const import DOMAIN, SIGNAL_UPDATE_ENTITY
+from ..const import SIGNAL_UPDATE_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -144,7 +144,8 @@ class DomoLight:
     @property
     def rgb_color(self) -> tuple[int, int, int]:
         """Restituisce il colore RGB."""
-        return tuple(self._rgb)
+        r, g, b = self._rgb
+        return (r, g, b)
 
     async def turn_on(self, brightness: Optional[int] = None, rgb: Optional[tuple] = None):
         payload = {

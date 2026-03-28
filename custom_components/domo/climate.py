@@ -29,7 +29,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.core import callback
 
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
-from .platforms.thermoregulation import get_thermostat, DomoThermostat
+from .platforms.thermoregulation import DomoThermostat
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class DomoClimateEntity(ClimateEntity):
             model=" ",
             
         )
-        suggested_area=thermostat.room
+        #suggested_area=thermostat.room
         self._attr_suggested_area = thermostat.room
         
         _LOGGER.debug("Created climate entity: %s in room %s", 

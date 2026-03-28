@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, PLATFORMS, CONF_PENDING
 from .gateway import DomoGateway
+from .platforms.activations import discover_activations, handle_activation_status_update
 from .platforms.digital_in import discover_digital_ins, handle_digital_in_status_update
 from .platforms.sicu import handle_security_status_update, discover_security
 from .platforms.lights import discover_lights, handle_light_status_update 
@@ -46,6 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     
     # Registra callback e avvia
+    gateway.register_event_callback(handle_activation_status_update)
     gateway.register_event_callback(handle_digital_in_status_update)
     gateway.register_event_callback(handle_security_status_update)
     gateway.register_event_callback(handle_light_status_update)
@@ -55,7 +57,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     await gateway.start()
     
-
+    await discover_activations(gateway)
     await discover_digital_ins(gateway)
     await discover_lights(gateway)
     await discover_security(gateway)
@@ -67,7 +69,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # Salva riferimento
     hass.data[DOMAIN][entry.entry_id] = gateway
-    hass.data[DOMAIN]["gateway"] = gateway    
+    #hass.data[DOMAIN]["gateway"] = gateway    
     
     # Inizializza il logger eventi
     _LOGGER.debug("Initializing Security events logger")
@@ -83,8 +85,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.debug("Unloading Domo integration")
     
     # Ferma gateway
-    gateway = hass.data[DOMAIN].pop(entry.entry_id)
-    await gateway.stop()
+    domo_gateway = hass.data[DOMAIN].pop(entry.entry_id)
+    await domo_gateway.stop()
     
     # Unload piattaforme
     await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
