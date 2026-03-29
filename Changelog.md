@@ -17,6 +17,7 @@ Tutte le modifiche rilevanti di questo progetto verranno documentate in questo f
 - Ingressi digitali
 - Scenari
 - Misuratori di energia elettrica
+- Attivazioni
 - Centrali antifurto
 
 
@@ -42,5 +43,6 @@ All notable changes to this project will be documented in this file.
 - Digital inputs
 - Scenes
 - Electric energy meters
+- Activations
 - Intrusion alarm panels
 
