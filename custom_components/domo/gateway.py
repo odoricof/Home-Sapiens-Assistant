@@ -16,8 +16,6 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
-
 import aiohttp
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from .const import SIGNAL_GATEWAY_ONLINE, SIGNAL_GATEWAY_OFFLINE
@@ -32,14 +30,6 @@ STATUS_UPDATE_CMD = "status_update_req"
 
 
 class DomoGateway:
-    """
-    Gateway ETI/Domo:
-    - login
-    - polling rx_status
-    - logging pacchetti grezzi
-    - nessuna logica di piattaforma
-    """
-
     def __init__(
         self,
         hass,
@@ -53,14 +43,16 @@ class DomoGateway:
         self.username = username
         self.password = password
         self.poll_interval = poll_interval
-
+        self.online: bool = False
         self._session: aiohttp.ClientSession | None = None
         self._client_id: str = ""
+        self._cseq: int = 0
         self._keep_alive_sec: int = 0
         self._session_expire_ts: float = 0.0
 
         self._running = False
         self._task: asyncio.Task | None = None
+        self._task_keep_alive: asyncio.Task | None = None
         self._event_callbacks = []
      
         self._was_connected = True
@@ -119,7 +111,7 @@ class DomoGateway:
             self._task = None
 
         # Cancella loop di keep-alive
-        if hasattr(self, "_task_keep_alive") and self._task_keep_alive:
+        if self._task_keep_alive:
             self._task_keep_alive.cancel()
             try:
                 await self._task_keep_alive
@@ -137,14 +129,12 @@ class DomoGateway:
     # --------------------------------------------------
 
     async def _poll_loop(self):
-        """Loop continuo rx_status."""
+        """Long polling loop."""
         while self._running:
             try:
                 await self.rx_status()
             except Exception as err:
                 _LOGGER.error("DOMO rx_status error: %s", err)
-                
-            await asyncio.sleep(self.poll_interval)
 
     # --------------------------------------------------
     # Keep-alive loop
@@ -167,10 +157,6 @@ class DomoGateway:
                 _LOGGER.error("DOMO keep-alive failed: %s", err)
             await asyncio.sleep(self._keep_alive_sec / 2)
 
-
-
-
-
     # --------------------------------------------------
     # HTTP helpers
     # --------------------------------------------------
@@ -192,10 +178,10 @@ class DomoGateway:
                     "Content-Type": "application/x-www-form-urlencoded",
                     "Connection": "Keep-Alive",
                 },
-                timeout=aiohttp.ClientTimeout(total=10),  # MODIFICATO: timeout fisso di 10 secondi
+                timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
                 resp.raise_for_status()
-                text = await resp.text()  # MODIFICATO: leggo come testo prima
+                text = await resp.text()
                 try:
                     return json.loads(text)
                 except json.JSONDecodeError:
@@ -254,6 +240,7 @@ class DomoGateway:
                 await self._login()
             except Exception as err:
                 _LOGGER.debug("DOMO login failed (offline?): %s", err)
+                await asyncio.sleep(30)
                 return
             
         payload = {
@@ -371,8 +358,5 @@ class DomoGateway:
 
 
     def get_cseq(self) -> int:
-        """Genera il prossimo sequence number per i comandi."""
-        if not hasattr(self, "_cseq"):
-            self._cseq = 0
         self._cseq += 1
         return self._cseq

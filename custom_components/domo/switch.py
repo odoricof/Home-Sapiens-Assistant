@@ -19,14 +19,13 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.core import callback
 
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
-from .platforms.activations import DomoActivation
+from .platforms.activations import DomoActivation, get_all_activations
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Setup switch platform per le attivazioni"""
-    from .platforms.activations import get_all_activations
     
     activations = get_all_activations()
     if not activations:
@@ -51,7 +50,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class DomoSwitchEntity(SwitchEntity):
     """Switch entity per attivazioni"""
     
-    # Mappa degli icon_id alle icone MDI
+    DEFAULT_ICON = "mdi:electric-switch"
     ICON_MAP = {
         1: "mdi:lightbulb-on-outline",
         2: "mdi:air-conditioner",
