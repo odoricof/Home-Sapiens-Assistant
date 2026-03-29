@@ -6,16 +6,15 @@ Integrazione personalizzata di Home Assistant per interfacciarsi con la webpage 
 
 - Domain: `domo`
 - Autore: Flavio odorico / [odoricof](https://github.com/odoricof)
-- Versione: 1.0.0
+- Versione: 1.0.1
 - IoT Class: local_polling
-- Entità supportate: alarm_control_panel
 ## English
 
 Custom Home Assistant integration to interface with the Home Sapiens webpage exposed by ETI/DOMO, with support for burglar alarm control panels.
 
 - Domain: `domo`
 - Author: Flavio Odorico / [odoricof](https://github.com/odoricof)
-- Version: 1.0.0
+- Version: 1.0.1
 - IoT Class: local_polling
-- Supported entities: alarm_control_panel
+
 
