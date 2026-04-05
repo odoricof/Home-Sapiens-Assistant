@@ -76,8 +76,8 @@ class DomoLightEntity(LightEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry.entry_id}_lights")},
             name="Lights",
-            manufacturer="Home Sapiens ",
-            model=" ",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
         )
         
         # Area suggerita per l'entità

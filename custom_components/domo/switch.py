@@ -36,8 +36,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     activations_device_info = DeviceInfo(
         identifiers={(DOMAIN, f"{entry.entry_id}_activations")},
         name="Activations",
-        manufacturer="Home Sapiens",
-        model="Relays Hub",
+        manufacturer="Home Sapiens Assitant",
+        model="Eti/Domo",
     )
     
     entities = [DomoSwitchEntity(activation, activations_device_info, entry.entry_id) 

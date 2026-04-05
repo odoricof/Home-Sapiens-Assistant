@@ -128,10 +128,10 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
     def device_info(self):
         """Return device information."""
         return DeviceInfo(
-            identifiers={(DOMAIN, f"central_{self._device.central_id}")},
-            name=self._device.name,
-            manufacturer="Home Sapiens",
-            model=" ",
+            identifiers={(DOMAIN, "burlgar_alarm")},
+            name="Alarm",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
         )   
      
     # --------------------------------------------------

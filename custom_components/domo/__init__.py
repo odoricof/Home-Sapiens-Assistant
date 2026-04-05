@@ -19,12 +19,15 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN, PLATFORMS, CONF_PENDING
 from .gateway import DomoGateway
 from .platforms.activations import discover_activations, handle_activation_status_update
+from .platforms.analogics import discover_analogics, handle_analogic_status_update
 from .platforms.digital_in import discover_digital_ins, handle_digital_in_status_update
 from .platforms.sicu import handle_security_status_update, discover_security
 from .platforms.lights import discover_lights, handle_light_status_update 
 from .platforms.thermoregulation import discover_thermostats, handle_thermostat_status_update
 from .platforms.meters import discover_meters, handle_meter_status_update
+from .platforms.openings import discover_openings, handle_opening_status_update
 from .platforms.scenarios import discover_scenarios, handle_scenario_status_update
+from .platforms.tvcc import discover_tvcc_cameras
 from .services.logger_security_events import SecurityEventsLogger
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,30 +51,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     # Registra callback e avvia
     gateway.register_event_callback(handle_activation_status_update)
+    gateway.register_event_callback(handle_analogic_status_update)
     gateway.register_event_callback(handle_digital_in_status_update)
     gateway.register_event_callback(handle_security_status_update)
     gateway.register_event_callback(handle_light_status_update)
     gateway.register_event_callback(handle_thermostat_status_update)
     gateway.register_event_callback(handle_meter_status_update)
+    gateway.register_event_callback(handle_opening_status_update)
     gateway.register_event_callback(handle_scenario_status_update)
     
     await gateway.start()
     
     await discover_activations(gateway)
+    await discover_analogics(gateway)
     await discover_digital_ins(gateway)
     await discover_lights(gateway)
     await discover_security(gateway)
     await discover_thermostats(gateway)
     await discover_meters(gateway)
+    await discover_openings(gateway)
     await discover_scenarios(gateway)
+    await discover_tvcc_cameras(gateway)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)    
     
+    hass.data[DOMAIN][entry.entry_id] = gateway   
     
-    # Salva riferimento
-    hass.data[DOMAIN][entry.entry_id] = gateway
-    #hass.data[DOMAIN]["gateway"] = gateway    
-    
-    # Inizializza il logger eventi
     _LOGGER.debug("Initializing Security events logger")
     SecurityEventsLogger(hass)    
     

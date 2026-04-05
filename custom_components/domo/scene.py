@@ -157,8 +157,8 @@ class DomoScenarioEntity(BaseScene):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_scenarios")},
             name="Scenarios",
-            manufacturer="Home Sapiens",
-            model=" ",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
         )        
         
         

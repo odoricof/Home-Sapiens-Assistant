@@ -35,4 +35,6 @@ PLATFORMS = [
     "sensor",
     "scene",
     "switch",
+    "cover",
+    "camera",
 ]

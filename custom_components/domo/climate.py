@@ -94,8 +94,8 @@ class DomoClimateEntity(ClimateEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_climate")},
             name="Climate",
-            manufacturer="Home Sapiens",
-            model=" ",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
             
         )
         #suggested_area=thermostat.room

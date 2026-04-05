@@ -35,8 +35,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     digital_inputs_device_info = DeviceInfo(
         identifiers={(DOMAIN, f"{entry.entry_id}_digital_inputs")},
         name="Digital Inputs",
-        manufacturer="Home Sapiens",
-        model=" ",
+        manufacturer="Home Sapiens Assistant",
+        model="Eti/Domo",
     )
     
     entities = [DomoBinarySensor(digital_in, digital_inputs_device_info) for digital_in in digital_ins]

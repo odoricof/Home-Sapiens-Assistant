@@ -288,7 +288,7 @@ def handle_thermostat_status_update(gateway, device_info: Dict[str, Any]) -> boo
     if not thermostat:
         return False
 
-    _LOGGER.debug("🌡️ Thermostat update received: %s", device_info)
+    #_LOGGER.debug("🌡️ Thermostat update received: %s", device_info)
 
     updated = thermostat.update_state(device_info)
 

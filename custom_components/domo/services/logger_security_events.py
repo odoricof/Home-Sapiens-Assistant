@@ -13,7 +13,7 @@ https://github.com/odoricof/Home-Sapiens-Assistant/issues
 from __future__ import annotations
 
 import logging
-import hashlib  # OK: importato una sola volta
+import hashlib
 from pathlib import Path
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
@@ -54,7 +54,6 @@ if not _event_logger.handlers:
     handler.setFormatter(formatter)
     _event_logger.addHandler(handler)
     
-    # Scrivi l'intestazione all'inizio del file
     header = "DATA,ORA,CENTRALE,RAW CENTRALE,STATO CENTRALE,AREA,RAW AREA,STATO AREA,INGRESSO,RAW INGRESSO,STATO INGRESSO"
     _event_logger.info(header)
 
@@ -66,7 +65,7 @@ class SecurityEventsLogger:
     def __init__(self, hass):
         self.hass = hass
         self._last_snapshot = None
-        self._last_log_key = None  # Chiave unica per l'ultimo log (timestamp + hash)
+        self._last_log_key = None
 
         async_dispatcher_connect(
             hass,
@@ -86,10 +85,8 @@ class SecurityEventsLogger:
             return
 
         prev = self._last_snapshot or {}
-        
-        # Verifica se ci sono cambiamenti rispetto allo snapshot precedente
         if prev == data:
-            return  # Nessun cambiamento, non loggare
+            return
 
         # ---------------- ESCLUDI STATO TRANSIZIONE ----------------
         c = data.get("central", {}) or {}
@@ -97,8 +94,8 @@ class SecurityEventsLogger:
         
         # Se la centrale è in transizione (256), non loggare
         if raw_central == 256:
-            self._last_snapshot = data  # Aggiorna comunque lo snapshot
-            return  # Esci senza loggare
+            self._last_snapshot = data
+            return
 
         now = datetime.now()
         date = now.strftime("%d.%m.%Y")
@@ -109,8 +106,7 @@ class SecurityEventsLogger:
         
         # ---------------- CENTRALE ----------------
         if raw_central is not None:
-            # Prende il nome della centrale direttamente dai dati
-            central_name = c.get("name", "CENTRALE")  # <-- MODIFICA QUI
+            central_name = c.get("name", "CENTRALE")
             
             log_parts.extend([
                 central_name,
@@ -132,33 +128,35 @@ class SecurityEventsLogger:
                     AREA_STATUS_MAP.get(raw_area, f"sconosciuto_{raw_area}")
                 ])
         else:
-            log_parts.extend(["", "", ""])  # Un set di campi vuoti se non ci sono aree
+            log_parts.extend(["", "", ""])
 
         # ---------------- TUTTI GLI INGRESSI ----------------
         inputs = data.get("inputs", [])
         if inputs:
-            for i in inputs:
-                raw_input = i.get("status")
-                name_input = i.get("name") or i.get("input_name") or f"input_{i.get('input_id')}"
-                log_parts.extend([
-                    name_input,
-                    str(raw_input),
-                    INPUT_STATUS_MAP.get(raw_input, f"sconosciuto_{raw_input}")
-                ])
+            filtered_inputs = [i for i in inputs if i.get("status") != 1]
+            
+            if filtered_inputs:
+                for i in filtered_inputs:
+                    raw_input = i.get("status")
+                    name_input = i.get("name") or i.get("input_name") or f"input_{i.get('input_id')}"
+                    log_parts.extend([
+                        name_input,
+                        str(raw_input),
+                        INPUT_STATUS_MAP.get(raw_input, f"sconosciuto_{raw_input}")
+                    ])
         else:
-            log_parts.extend(["", "", ""])  # Un set di campi vuoti se non ci sono ingressi
+            log_parts.extend(["", "", ""])
 
         # Crea la stringa da loggare
         log_line = ",".join(str(part) for part in log_parts)
         
         # Evita duplicati nello stesso timestamp
         data_hash = hashlib.md5(str(data).encode()).hexdigest()[:8]
-        current_key = f"{time}_{data_hash}"  # Chiave: timestamp + hash
-        
-        # Se è lo stesso identico evento nello stesso secondo, salta
+        current_key = f"{time}_{data_hash}"
+
         if current_key == self._last_log_key:
             return
             
         _event_logger.info(log_line)
-        self._last_log_key = current_key  # Aggiorna l'ultima chiave
+        self._last_log_key = current_key
         self._last_snapshot = data
