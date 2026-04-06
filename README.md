@@ -1,6 +1,7 @@
 <p style="text-align: left;">
   <img src="images/icon.png" width="200" alt="Icona">
 </p>
+
 # Home Sapiens Assistant
 
 Custom integration for **Home Assistant** to interface with **Bpt Home Automation / CAME Domotic 3.0 (Systems based of ETI-Domo server)** via the Home Sapiens web interface.
