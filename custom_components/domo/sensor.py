@@ -50,7 +50,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             identifiers={(DOMAIN, f"{entry.entry_id}_analogics")},
             name="Analogic Inputs",
             manufacturer="Home Sapiens Assistant",
-            model="Eti/domo",
+            model="Eti/Domo",
         )
         
         for analog_in in analogics:
@@ -83,8 +83,8 @@ class DomoPowerSensor(SensorEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_sensors")},
             name="Sensors",
-            manufacturer="Home Sapiens",
-            model=" ",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
         )        
         
         
