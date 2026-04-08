@@ -13,13 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Create release zip
+      - name: Create zip
         run: |
           cd custom_components/domo
           zip -r ../../home-sapiens-assistant.zip ./*
       
-      - name: Upload zip to release
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           files: home-sapiens-assistant.zip
-          fail_on_unmatched_files: true
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
