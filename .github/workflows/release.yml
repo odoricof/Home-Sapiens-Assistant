@@ -15,7 +15,7 @@ jobs:
       
       - name: Create release zip
         run: |
-          cd custom_components/home_sapiens_assistant
+          cd custom_components/domo
           zip -r ../../home-sapiens-assistant.zip ./*
       
       - name: Upload zip to release
