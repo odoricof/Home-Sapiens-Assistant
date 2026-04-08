@@ -22,5 +22,3 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: home-sapiens-assistant.zip
-        env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
