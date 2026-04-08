@@ -1,0 +1,23 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create zip
+        run: |
+          cd custom_components/home_sapiens_assistant
+          zip -r ../../home-sapiens-assistant.zip .
+      
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: home-sapiens-assistant.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
