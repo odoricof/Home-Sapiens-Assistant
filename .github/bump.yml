@@ -1,0 +1,6 @@
+files:
+  - file-path: 'custom_components/domo/manifest.json'
+  - file-path: 'README.md'  # o info.md
+
+bump:
+  default: 'patch'
