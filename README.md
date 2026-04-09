@@ -1,6 +1,6 @@
-<p style="text-align: left;">
-  <img src="images/icon.png" width="200" alt="Icona">
-</p>
+[![Current release](https://img.shields.io/github/release/odoricof/Home-Sapiens-Assistant.svg?style=plastic&label=Current%20release)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
+[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=plastic)](https://github.com/odoricof/Home-Sapiens-Assistant)
+<!--[![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)-->
 
 # Home Sapiens Assistant
 
@@ -76,7 +76,7 @@ After installation:
 
 - A working **CAME Domotic / CameDomotic 3.0 system**
 - Access to the **Home Sapiens web interface**
-- Network connectivity between Home Assistant and the gateway
+- Network connectivity between Home Assistant and the server Eti/Domo
 
 ---
 
