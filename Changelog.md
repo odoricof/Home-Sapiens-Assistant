@@ -29,3 +29,7 @@ All notable changes to this project will be documented in this file.
 - TVCC
 - Openings
 - Digital inputs
+
+## [1.1.1] - 2026-04-09
+
+- Minor improvements
