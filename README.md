@@ -76,7 +76,7 @@ After installation:
 
 - A working **CAME Domotic / CameDomotic 3.0 system**
 - Access to the **Home Sapiens web interface**
-- Network connectivity between Home Assistant and the gateway
+- Network connectivity between Home Assistant and the server Eti/Domo
 
 ---
 
