@@ -1,5 +1,5 @@
 <p style="text-align: left;">
-  <img src="images/icon.png" width="200" alt="Icona">
+  <img src="brand/icon@x2.png" width="200" alt="Icona">
 </p>
 
 # Home Sapiens Assistant
