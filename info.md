@@ -5,7 +5,7 @@ Custom Home Assistant integration to interface with the Home Sapiens webpage exp
 
 - Domain: `domo`
 - Author: [odoricof](https://github.com/odoricof)
-- Version: 1.1.0
+- Version: 1.1.1
 - IoT Class: local_polling
 
 
