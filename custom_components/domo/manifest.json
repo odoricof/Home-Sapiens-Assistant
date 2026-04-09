@@ -1,8 +1,8 @@
 {
   "domain": "domo",
   "name": "Home Sapiens Assistant",
-  "config_flow": true,
   "codeowners": ["@odoricof"],
+  "config_flow": true,
   "documentation": "https://github.com/odoricof/Home-Sapiens-Assistant",
   "integration_type": "hub",
   "iot_class": "local_polling",
