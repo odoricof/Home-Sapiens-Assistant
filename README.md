@@ -1,9 +1,12 @@
 [![Current release](https://img.shields.io/github/release/odoricof/Home-Sapiens-Assistant.svg?style=plastic&label=Current%20release)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=plastic)](https://github.com/odoricof/Home-Sapiens-Assistant)
-<!--[![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)-->
+[![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
+[![Buy me a beer 🍺🍺🍺](https://img.shields.io/badge/PayPal-Buy%20me%20a%20beer%20🍺🍺🍺-blue?style=plastic&logo=paypal)](https://paypal.me/odoricof)
+
+<img src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo.png" width="96">
 
 # Home Sapiens Assistant
-
+---
 Custom integration for **Home Assistant** to interface with **Bpt Home Automation / CAME Domotic 3.0 (Systems based of ETI-Domo server)** via the Home Sapiens web interface.
 
 ---
@@ -74,7 +77,7 @@ After installation:
 
 ## Requirements
 
-- A working **CAME Domotic / CameDomotic 3.0 system**
+- A working **Bpt Home Sapiens Domotic system / CameDomotic 3.0 system**
 - Access to the **Home Sapiens web interface**
 - Network connectivity between Home Assistant and the server Eti/Domo
 
