@@ -1,20 +1,22 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
+about: Suggest an improvement or new feature for Home-Sapiens-Assistant
+title: "[Feature] "
+labels: enhancement
 assignees: ''
-
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+## Feature request
+Describe the feature or improvement you would like.
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+## Problem / Use case
+What problem would this solve?
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+## Proposed solution
+How should it work?
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+## Alternatives considered
+Optional: other ideas or approaches considered.
+
+## Additional context
+Screenshots, examples, devices, integrations, notes.
