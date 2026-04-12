@@ -410,11 +410,30 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
                 ),
                 "areas": input_areas,
             }
-
+            
+        # USCITE
+        outputs = data.get("outputs", [])
+        outputs_status = {}
+        
+        for o in outputs:
+            output_id = o.get("output_id")
+            raw_status = o.get("status")
+            output_name = o.get("name", f"output_{output_id}")
+            
+            if raw_status is None:
+                continue
+            
+            outputs_status[output_name] = {
+                "raw": raw_status,
+                "state": "on" if raw_status == 1 else "off",
+                "output_id": output_id,
+            }
+            
         return {
             "central": central_status,
             "areas": areas_status,
             "inputs": inputs_status,
+            "outputs": outputs_status,
         }
         
         

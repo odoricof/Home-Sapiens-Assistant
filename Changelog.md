@@ -25,7 +25,6 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 ### Supported platforms
-
 - TVCC
 - Openings
 - Digital inputs
@@ -33,3 +32,10 @@ All notable changes to this project will be documented in this file.
 ## [1.1.1] - 2026-04-09
 
 - Minor improvements
+
+## [1.2.0] - 2026-04-12
+
+### Added
+- Security Areas
+- Security Inputs
+- security Outputs

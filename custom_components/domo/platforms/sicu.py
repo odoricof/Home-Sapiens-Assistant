@@ -1,5 +1,4 @@
-"""
-domo/platforms/sicu.py
+"""domo/platforms/sicu.py
 
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
@@ -75,6 +74,15 @@ async def discover_security(gateway):
             "central_id": 0
         }, resp_command=None)
         
+        # 4.5. Richiedi lista uscite (central_id=0)
+        _LOGGER.debug("SECURITY requesting outputs list for central_id=0")
+        outputs_resp = await gateway.tx_command({
+            "appl_msg_type": "sicu",
+            "cmd_name": "sicu_outputs_list_req",
+            "central_id": 0
+        }, resp_command=None)        
+        _LOGGER.debug("SECURITY outputs response: %s", outputs_resp)    
+        
         # 5. Crea la centrale con i dati raccolti
         central_info = {
             "central_id": 0,
@@ -97,6 +105,8 @@ async def discover_security(gateway):
             await _SECURITY_DEVICE.update(inputs_resp)
         if scenarios_resp:
             await _SECURITY_DEVICE.update(scenarios_resp)
+        if outputs_resp:
+            await _SECURITY_DEVICE.update(outputs_resp)
             
         return _SECURITY_DEVICE
         
@@ -194,7 +204,11 @@ class SecurityCentral:
         # ---- ingressi ----
         self._inputs_state: dict[int, dict] = {}
         self._inputs: list[dict] = []
-
+        
+        # ---- uscite ----
+        self._outputs_state: dict[int, dict] = {}
+        self._outputs: list[dict] = []
+        
         _LOGGER.debug(
             "SECURITY device initialized | uid=%s | thread=%s | mapping=%s",
             self.unique_id,
@@ -221,6 +235,12 @@ class SecurityCentral:
         # Richiedi lista ingressi
         await self._gateway.tx_command({
             "cmd_name": "sicu_inputs_list_req",
+            "central_id": self.central_id
+        })
+
+        # Richiedi lista uscite
+        await self._gateway.tx_command({
+            "cmd_name": "sicu_outputs_list_req",
             "central_id": self.central_id
         })
         
@@ -367,8 +387,48 @@ class SecurityCentral:
                 data.get("areas"),
             )
             return True
+            
+        # --------------------------------------------------
+        # USCITE
+        # --------------------------------------------------
+        if cmd == "sicu_outputs_list_resp":
+            _LOGGER.info("SECURITY received outputs list (%d items)", len(data.get("array", [])))
+            for out in data.get("array", []):
+                output_id = out.get("output_id")
+                if output_id is not None:
+                    self._outputs_state[output_id] = out
+                    _LOGGER.debug("SECURITY output: %s (ID: %s, status: %s, extra: %s)", 
+                                 out.get("name"), output_id, 
+                                 out.get("status"), out.get("extra"))
+            self._outputs = list(self._outputs_state.values())
+            self._rebuild_snapshot()
+            return True
+
+        if cmd == "sicu_output_status_ind":
+            output_id = data.get("output_id")
+            if output_id is None:
+                return False
+
+            self._outputs_state[output_id] = {
+                "output_id": output_id,
+                "name": data.get("name"),
+                "status": data.get("status"),
+                "type": data.get("type", "generic"),
+            }
+            self._outputs = list(self._outputs_state.values())
+            self._rebuild_snapshot()
+            self.update_pending = True
+
+            _LOGGER.debug(
+                "SECURITY output updated | id=%s name=%s status=%s",
+                output_id,
+                data.get("name"),
+                data.get("status"),
+            )
+            return True            
 
         return False
+
 
     # --------------------------------------------------
     # HANDLER SPECIFICI
@@ -559,6 +619,7 @@ class SecurityCentral:
             "central": dict(self._state),
             "areas": list(self._areas),
             "inputs": list(self._inputs),
+            "outputs": list(self._outputs),
             "known_area_ids": sorted(self._known_area_ids),
         }
             

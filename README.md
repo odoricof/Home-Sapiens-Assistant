@@ -24,6 +24,9 @@ Currently supported:
 - Energy meters
 - Fan coils
 - Intrusion alarm panel
+   - Areas
+   - Inputs
+   - Outputs
 - Lights
 - Openings
 - Scenes

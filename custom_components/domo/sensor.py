@@ -1,5 +1,4 @@
-"""
-domo/sensor.py
+"""domo/sensor.py
 
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
@@ -26,15 +25,51 @@ from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
 from .platforms.analogics import DomoAnalogIn, get_all_analogics
 from .platforms.meters import DomoMeter
 from .platforms.meters import get_all_meters
+from .platforms.sicu import get_security_device
 
 _LOGGER = logging.getLogger(__name__)
 
+# Mappa stati ingressi sicurezza
+INPUT_STATUS_MAP = {
+    1: "Chiuso",
+    5: "Escluso",
+    9: "Memoria allarme",
+    16: "Sconosciuto",
+    17: "Aperto",
+    25: "Allarme",
+    65: "Batteria scarica",
+}
+
+# Mappa stati aree sicurezza
+AREA_STATUS_MAP = {
+    #proxinet:
+    32: "Non pronta",
+    33: "Inserimento con ingressi aperti",
+    34: "Apertura ingresso in attesa disarmo",
+    36: "Intrusione rilevata e ingressi aperti",
+    40: "Pronta",
+    41: "Inserimento in corso",
+    42: "Inserita",
+    38: "Allarme intrusione in corso",
+    46: "Intrusione rilevata",
+    44: "Memoria allarme",
+    96: "Ingressi aperti e ingressi esclusi",
+    104: "Pronta con ingressi esclusi",
+    #pxc:
+    48: "Non pronta",
+    56: "Pronta (ingressi chiusi)",
+    58: "Inserita",
+    60: "Memoria allarme",
+    182: "Allarme intrusione in corso",
+    190: "Sconosciuto",
+}
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Setup sensor platform"""
     
     meters = get_all_meters()
     analogics = get_all_analogics()
+    security = get_security_device()
     
     entities = []
     
@@ -57,12 +92,41 @@ async def async_setup_entry(hass, entry, async_add_entities):
             entities.append(DomoAnalogSensor(analog_in, analog_device_info, entry.entry_id))
         _LOGGER.debug("Added %d analog sensor entities", len(analogics))
     
+    # Sensori per gli ingressi della sicurezza
+    if security and hasattr(security, "_inputs") and security._inputs:
+        security_inputs_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_security_inputs")},
+            name="Security Inputs",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
+        )
+        
+        for inp in security._inputs:
+            input_id = inp.get("input_id")
+            input_name = inp.get("name", f"Sensore {input_id}")
+            entities.append(SecurityInputSensor(security, input_id, input_name, security_inputs_device_info))
+            _LOGGER.info("Added sensor for security input: %s (ID: %s)", input_name, input_id)
+
+    # 4. Sensori per le aree della sicurezza
+    if security and hasattr(security, "_areas") and security._areas:
+        security_areas_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_security_areas")},
+            name="Security Areas",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
+        )
+        
+        for area in security._areas:
+            area_id = area.get("area_id")
+            area_name = area.get("name", f"Area {area_id}")
+            entities.append(SecurityAreaSensor(security, area_id, area_name, security_areas_device_info))
+            _LOGGER.info("Added sensor for security area: %s (ID: %s)", area_name, area_id)        
+        
     if entities:
         async_add_entities(entities)
-        _LOGGER.debug("Added %d total sensor entities (meters + analogics)", len(entities))
+        _LOGGER.debug("Added %d total sensor entities (meters + analogics + security inputs + security areas)", len(entities))
     else:
         _LOGGER.debug("No sensors found to setup")
-
 
 class DomoPowerSensor(SensorEntity):
     """Sensore di potenza istantanea."""
@@ -86,8 +150,6 @@ class DomoPowerSensor(SensorEntity):
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )        
-        
-        
         
         # Icona appropriata in base al tipo
         if meter.is_production:
@@ -197,6 +259,7 @@ class DomoEnergySensor(SensorEntity):
         """Gestisce aggiornamenti."""
         if entity_id is None or entity_id == self._attr_unique_id:
             self.async_write_ha_state()
+
 
 class DomoAnalogSensor(SensorEntity):
     """Sensore per ingressi analogici ETI Domo."""
@@ -309,3 +372,156 @@ class DomoAnalogSensor(SensorEntity):
         """Handle update from bus."""
         if entity_id is None or entity_id == self._attr_unique_id:
             self.async_write_ha_state()
+
+
+class SecurityInputSensor(SensorEntity):
+    def __init__(self, security, input_id: int, name: str, device_info: DeviceInfo, sensor_type: int = None):
+        self._security = security
+        self._input_id = input_id
+        self._attr_unique_id = f"{security.unique_id}_input_{input_id}"
+        self._attr_name = f"Security {name}"
+        self._attr_should_poll = False
+        self._attr_device_info = device_info
+        self._sensor_type = sensor_type
+        
+        # Inizializza lo stato come fa DomoLight
+        self._state = "Sconosciuto"
+        self._raw_status = None
+        self._areas = []
+        
+        # Cerca lo stato iniziale nei dati già disponibili
+        for inp in security._inputs:
+            if inp.get("input_id") == input_id:
+                raw_status = inp.get("status")
+                self._raw_status = raw_status
+                self._state = INPUT_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
+                self._areas = inp.get("areas", [])
+                break
+        
+        _LOGGER.debug("Security input %s initial state: %s", name, self._state)
+        
+    @property
+    def icon(self) -> str:
+        """Icona basata sullo stato."""
+        if self._state == "Allarme":
+            return "mdi:alarm-light"
+        if self._state == "Aperto":
+            return "mdi:lock-open-variant"
+        if self._state == "Chiuso":
+            return "mdi:lock"
+        if self._state == "Escluso":
+            return "mdi:shield-off"
+        if self._state == "Memoria allarme":
+            return "mdi:bell-alert"
+        if self._state == "Batteria scarica":
+            return "mdi:battery-low"
+        return "mdi:sensor"
+        
+    @property
+    def native_value(self) -> str:
+        """Restituisce lo stato testuale del sensore."""
+        return self._state or "Sconosciuto"
+        
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Attributi aggiuntivi."""
+        return {
+            "raw_status": self._raw_status,
+            "areas": self._areas,
+        }
+
+    async def async_added_to_hass(self):
+        """When entity is added to hass."""
+        @callback
+        def handle_update(entity_id: str = None):
+            """Handle update from bus."""
+            if entity_id and entity_id != self._attr_unique_id:
+                return
+            snapshot = getattr(self._security, "_last_snapshot", None)
+            if snapshot:
+                for inp in snapshot.get("inputs", []):
+                    if inp.get("input_id") == self._input_id:
+                        raw_status = inp.get("status")
+                        self._raw_status = raw_status
+                        self._state = INPUT_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
+                        self._areas = inp.get("areas", [])
+                        self.async_write_ha_state()
+                        break
+        
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, handle_update)
+        )
+        
+class SecurityAreaSensor(SensorEntity):
+    """Sensor entity per le aree della centrale sicurezza."""
+    
+    def __init__(self, security, area_id: int, name: str, device_info: DeviceInfo):
+        self._security = security
+        self._area_id = area_id
+        self._attr_unique_id = f"{security.unique_id}_area_{area_id}"
+        self._attr_name = f"Security {name}"
+        self._attr_should_poll = False
+        self._attr_device_info = device_info
+        self._state = "Sconosciuto"
+        self._raw_status = None
+        
+        # Inizializza lo stato iniziale
+        for area in security._areas:
+            if area.get("area_id") == area_id:
+                raw_status = area.get("status")
+                self._raw_status = raw_status
+                self._state = AREA_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
+                break
+        
+        _LOGGER.debug("Security area %s initial state: %s", name, self._state)
+        
+    @property
+    def icon(self) -> str:
+        """Icona basata sullo stato."""
+        if self._state == "Inserita":
+            return "mdi:shield-check"
+        if self._state == "Inserimento in corso":
+            return "mdi:shield-sync"
+        if self._state == "Allarme intrusione in corso":
+            return "mdi:alarm-light"
+        if self._state == "Memoria allarme":
+            return "mdi:bell-alert"
+        if self._state == "Pronta":
+            return "mdi:shield-lock"
+        if "Non pronta" in self._state:
+            return "mdi:shield-lock-open"
+        return "mdi:shield"
+        
+    @property
+    def native_value(self) -> str:
+        """Restituisce lo stato testuale dell'area."""
+        return self._state
+        
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Attributi aggiuntivi."""
+        return {
+            "raw_status": self._raw_status,
+            "area_id": self._area_id,
+        }
+
+    async def async_added_to_hass(self):
+        """When entity is added to hass."""
+        @callback
+        def handle_update(entity_id: str = None):
+            """Handle update from bus."""
+            if entity_id and entity_id != self._attr_unique_id:
+                return
+            snapshot = getattr(self._security, "_last_snapshot", None)
+            if snapshot:
+                for area in snapshot.get("areas", []):
+                    if area.get("area_id") == self._area_id:
+                        raw_status = area.get("status")
+                        self._raw_status = raw_status
+                        self._state = AREA_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
+                        self.async_write_ha_state()
+                        break
+        
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, handle_update)
+        )        
