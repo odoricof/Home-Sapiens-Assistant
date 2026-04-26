@@ -8,7 +8,7 @@
 
 # Home Sapiens Assistant
 ---
-Custom integration for **Home Assistant** to interface with **Bpt Home Automation / CAME Domotic 3.0 (Systems based of ETI/Domo server)** via the Home Sapiens web interface.
+Custom integration for **Home Assistant** to interface with **Bpt Home Automation / CAME Domotic 3.0 (Systems based of ETI/DOMO server)** via the Home Sapiens web interface.
 
 ---
 
@@ -33,12 +33,16 @@ Currently supported:
 - Scenes
 - TVCC
 
+Services:
+
+- Offline/Online status notifications for the ETI/DOMO server
+- Weekly Security event log
 
 ---
 
 ## How It Works
 
-The integration communicates with the system by reproducing the same HTTP requests used by the official **Home Sapiens web interface** exposed by ETI/Domo.
+The integration communicates with the system by reproducing the same HTTP requests used by the official **Home Sapiens web interface** exposed by ETI/DOMO.
 
 No direct API is provided by the manufacturer; therefore, the integration interacts with the system through observed web communication.
 
@@ -74,7 +78,7 @@ After installation:
 2. Click **Add Integration**
 3. Search for **Home Sapiens Assistant**
 4. Enter:
-   - IP address of ETI/Domo server
+   - IP address of ETI/DOMO server
    - Credentials of Home Sapiens web page login
 
 ---
@@ -83,7 +87,7 @@ After installation:
 
 - A working **Bpt Home Sapiens Domotic system / CameDomotic 3.0 system**
 - Access to the **Home Sapiens web interface**
-- Network connectivity between Home Assistant and the server Eti/Domo
+- Network connectivity between Home Assistant and the server ETI/DOMO
 
 ---
 
