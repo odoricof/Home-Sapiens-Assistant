@@ -1,5 +1,6 @@
 [![Current release](https://img.shields.io/github/release/odoricof/Home-Sapiens-Assistant.svg?style=plastic&label=Current%20release)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=plastic)](https://github.com/odoricof/Home-Sapiens-Assistant)
+[![HACS Repository](https://img.shields.io/badge/HACS_Repository-%2341BDF5.svg?style=plastic&logo=homeassistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=odoricof&repository=Home-Sapiens-Assistant&category=integration)
 [![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![Buy me a beer 🍺🍺🍺](https://img.shields.io/badge/PayPal-Buy%20me%20a%20beer%20🍺🍺🍺-blue?style=plastic&logo=paypal)](https://paypal.me/odoricof)
 
@@ -7,7 +8,7 @@
 
 # Home Sapiens Assistant
 ---
-Custom integration for **Home Assistant** to interface with **Bpt Home Automation / CAME Domotic 3.0 (Systems based of ETI-Domo server)** via the Home Sapiens web interface.
+Custom integration for **Home Assistant** to interface with **Bpt Home Automation / CAME Domotic 3.0 (Systems based of ETI/Domo server)** via the Home Sapiens web interface.
 
 ---
 
@@ -50,7 +51,7 @@ No direct API is provided by the manufacturer; therefore, the integration intera
 1. Open HACS in Home Assistant  
 2. Go to **Integrations**  
 3. Click the three dots → **Custom repositories**  
-4. Add this repository: https://github.com/odoricof/Home-Sapiens-Assistant
+4. Add the repository https://github.com/odoricof/Home-Sapiens-Assistant or click on [![HACS Repository](https://img.shields.io/badge/HACS_Repository-%2341BDF5.svg?style=plastic&logo=homeassistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=odoricof&repository=Home-Sapiens-Assistant&category=integration)
 5. Category: **Integration**  
 6. Search for **Home Sapiens Assistant** and install  
 7. Restart Home Assistant  
