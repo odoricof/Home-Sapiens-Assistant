@@ -73,7 +73,7 @@ class DomoGateway:
      
      
     def register_event_callback(self, callback):
-        """Registra una funzione da chiamare per ogni evento ricevuto."""
+        """Registers a function to be called for each received event."""
         self._event_callbacks.append(callback)
         _LOGGER.debug("DOMO Event callback registered, total: %d", len(self._event_callbacks))        
 
@@ -82,7 +82,7 @@ class DomoGateway:
     # --------------------------------------------------
 
     async def start(self):
-        """Avvia il gateway."""
+        """Gateway Start"""
         if self._running:
             return
 
@@ -96,12 +96,12 @@ class DomoGateway:
         self._task_keep_alive = self.hass.loop.create_task(self._keep_alive_loop())
 
     async def stop(self):
-        """Ferma il gateway."""
+        """Gateway stop"""
         _LOGGER.info("DOMO gateway stopping")
 
         self._running = False
 
-        # Cancella loop principale di polling
+        # Cancel main polling loop
         if self._task:
             self._task.cancel()
             try:
@@ -110,7 +110,7 @@ class DomoGateway:
                 pass
             self._task = None
 
-        # Cancella loop di keep-alive
+        # Cancel keep-alive loop
         if self._task_keep_alive:
             self._task_keep_alive.cancel()
             try:
@@ -119,7 +119,7 @@ class DomoGateway:
                 pass
             self._task_keep_alive = None
 
-        # Chiudi sessione HTTP
+        # Close HTTP session
         if self._session:
             await self._session.close()
             self._session = None
@@ -140,7 +140,7 @@ class DomoGateway:
     # Keep-alive loop
     # --------------------------------------------------
     async def _keep_alive_loop(self):
-        """Invia periodicamente il keep-alive per mantenere attiva la sessione."""
+        """Periodically sends keep-alive to keep the session active."""
         while self._running and self._client_id:
             try:
                 payload = {
@@ -286,9 +286,9 @@ class DomoGateway:
                         for callback in self._event_callbacks:
                             try:
                                 if asyncio.iscoroutinefunction(callback):
-                                    await callback(self, event)  # <-- se è async, usa await
+                                    await callback(self, event)
                                 else:
-                                    callback(self, event)  # <-- se è sync, chiama normale
+                                    callback(self, event)
                             except Exception as err:
                                 _LOGGER.error("DOMO Error in event callback: %s", err)                  
                         
@@ -298,7 +298,7 @@ class DomoGateway:
             else:
                 _LOGGER.debug("DOMO unexpected response: cmd_name=%s | resp=%s", cmd_name, resp)
 
-                # se il gateway è ripartito la sessione non è più valida
+                # if the gateway has restarted, the session is no longer valid
                 if cmd_name is None:
                     _LOGGER.warning("DOMO session lost, forcing re-login")
                     self._session_expire_ts = 0
@@ -322,9 +322,8 @@ class DomoGateway:
     # --------------------------------------------------            
             
     async def tx_command(self, payload: dict, resp_command: str | None = None) -> dict | None:
-        _LOGGER.info(">>> GATEWAY tx_command ENTERED with payload: %s", payload.get("cmd_name"))
+        _LOGGER.debug("DOMO tx_command: %s", payload.get("cmd_name"))
         if not self._session_valid():
-            _LOGGER.info(">>> Session invalid, logging in...")
             await self._login()
 
         request_payload = {
@@ -334,27 +333,34 @@ class DomoGateway:
             "sl_appl_msg": payload,
         }
 
-        _LOGGER.debug("DOMO tx_command: %s", payload.get("cmd_name"))
-        _LOGGER.info(">>> GATEWAY sending request: %s", request_payload)
-       
-        
+        # Retry on error
+        for attempt in range(2):
+            try:
+                resp = await self._post(request_payload)
+                
+                if resp_command and resp.get("cmd_name") != resp_command:
+                    _LOGGER.warning(
+                        "DOMO Unexpected response command: expected %s, got %s",
+                        resp_command,
+                        resp.get("cmd_name"),
+                    )
+                
+                return resp
+            
+            except TimeoutError:
+                if attempt == 0:
+                    _LOGGER.debug("DOMO tx_command timeout, retrying: %s - PAYLOAD: %s", 
+                                  payload.get("cmd_name"), payload)
+                    continue
+                else:
+                    _LOGGER.error("DOMO tx_command failed after retry: %s - PAYLOAD: %s", 
+                                  payload.get("cmd_name"), payload)
+                    return None
 
-        try:
-            # Il timeout è già gestito in _post (total=10)
-            resp = await self._post(request_payload)
-            
-            if resp_command and resp.get("cmd_name") != resp_command:
-                _LOGGER.warning(
-                    "DOMO Unexpected response command: expected %s, got %s",
-                    resp_command,
-                    resp.get("cmd_name"),
-                )
-            
-            return resp
-        
-        except Exception as err:
-            _LOGGER.error("DOMO tx_command failed: %s - %s", type(err).__name__, err)
-            return None         
+            except Exception as err:
+                _LOGGER.error("DOMO tx_command failed: %s - %s - PAYLOAD: %s", 
+                              type(err).__name__, err, payload)
+                return None
 
 
     def get_cseq(self) -> int:

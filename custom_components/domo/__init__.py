@@ -29,6 +29,7 @@ from .platforms.openings import discover_openings, handle_opening_status_update
 from .platforms.scenarios import discover_scenarios, handle_scenario_status_update
 from .platforms.tvcc import discover_tvcc_cameras
 from .services.logger_security_events import SecurityEventsLogger
+from .services.notifications import async_register_notification_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,11 +38,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Domo from a config entry."""
     _LOGGER.debug("Setting up Domo integration via config flow")
     
-    # Inizializza strutture dati
+    # Initialize data structures
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].setdefault(CONF_PENDING, {})
     
-    # Crea gateway con i dati dalla config entry
+    # Create gateway with data from config entry
     gateway = DomoGateway(
         hass,
         host=entry.data["host"],
@@ -49,7 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         password=entry.data["password"],
     )
     
-    # Registra callback e avvia
+    # Register callbacks and start
     gateway.register_event_callback(handle_activation_status_update)
     gateway.register_event_callback(handle_analogic_status_update)
     gateway.register_event_callback(handle_digital_in_status_update)
@@ -61,6 +62,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     gateway.register_event_callback(handle_scenario_status_update)
     
     await gateway.start()
+    await async_register_notification_services(hass, gateway)
     
     await discover_activations(gateway)
     await discover_analogics(gateway)
@@ -88,14 +90,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     _LOGGER.debug("Unloading Domo integration")
     
-    # Ferma gateway
+    # Stop gateway
     domo_gateway = hass.data[DOMAIN].pop(entry.entry_id)
     await domo_gateway.stop()
     
-    # Unload piattaforme
+    # Unload plarforms
     await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     
-    # Se non ci sono altre entry, pulisci
+    # If no other entries remain, clean up
     if not hass.data[DOMAIN]:
         hass.data.pop(DOMAIN)
     
