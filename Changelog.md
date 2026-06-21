@@ -44,3 +44,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Offline/Online status notifications for the ETI/DOMO server
+
+## [1.3.1] - 2026-06-21
+
+- Bugfix: correct thermostat summer mode

@@ -4,7 +4,7 @@
 [![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![Buy me a beer 🍺🍺🍺](https://img.shields.io/badge/PayPal-Buy%20me%20a%20beer%20🍺🍺🍺-blue?style=plastic&logo=paypal)](https://paypal.me/odoricof)
 
-<img src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo@2x.png" width="96">
+<img src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo@2x.png" width="96" alt="">
 
 # Home Sapiens Assistant
 ---
@@ -58,9 +58,9 @@ No direct API is provided by the manufacturer; therefore, the integration intera
 4. Add the repository `https://github.com/odoricof/Home-Sapiens-Assistant`
 
    or click on [![HACS Repository](https://img.shields.io/badge/HACS_Repository-%2341BDF5.svg?style=plastic&logo=homeassistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=odoricof&repository=Home-Sapiens-Assistant&category=integration)
-6. Category: **Integration**  
-7. Search for **Home Sapiens Assistant** and install  
-8. Restart Home Assistant  
+5. Category: **Integration**  
+6. Search for **Home Sapiens Assistant** and install  
+7. Restart Home Assistant  
 
 ---
 
@@ -84,7 +84,31 @@ After installation:
    - Credentials of Home Sapiens web page login
 
 ---
+## Note on Scenario Visualization in the Home Assistant Alarm Panel
 
+To ensure proper and consistent visualization of scenarios within the Home Assistant Alarm Panel, the following condition must be met:
+
+> **Each scenario programmed on the alarm control panel must include at least one area that differs from the others.**  
+> This differentiation allows the system to correctly recognize and display the current status of the security system.
+
+### Practical Example
+
+#### Defined Areas:
+- **Day Area**
+- **Night Area**
+- **Perimeter Area**
+
+#### Scenarios and Associated Areas:
+
+| Scenario          | Associated Areas                       |
+|-------------------|----------------------------------------|
+| **"Armed away"**  | Day Area + Night Area + Perimeter Area |
+| **"Armed home"**  | Perimeter Area                         |
+| **"Armed night"** | Day Area + Perimeter Area              |
+
+In this example, each scenario features a unique combination of areas, enabling the Home Assistant panel to distinguish between them correctly and update the user interface accordingly.
+
+> **Important:** When configuring your alarm control panel, ensure that each scenario is assigned a **distinct set of areas** different from all the others.
 ## Requirements
 
 - A working **Bpt Home Sapiens Domotic system / CameDomotic 3.0 system**
