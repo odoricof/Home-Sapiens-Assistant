@@ -23,9 +23,9 @@ _LOGGER = logging.getLogger(__name__)
 # Mappa delle modalità termostato
 THERMO_MODES = {
     0: "off",
-    1: "heat",    
+    1: "manual",    
     2: "auto",
-    3: "cool",
+    3: "jolly",
 }
 
 # Dizionario globale per tenere traccia di tutti i termostati
@@ -168,9 +168,9 @@ class DomoThermostat:
             return "off"
         
         if self._status == 1:  # Richiesta attiva
-            if self._season == "winter" or self._mode == 1:
+            if self._season == "winter":
                 return "heating"
-            elif self._season == "summer" or self._mode == 3:
+            elif self._season == "summer":
                 return "cooling"
         return "idle"
 

@@ -134,13 +134,19 @@ class DomoClimateEntity(ClimateEntity):
     def hvac_mode(self) -> HVACMode:
         """Return hvac operation ie. heat, cool mode."""
         eti_mode = self._thermostat.hvac_mode
-        if eti_mode == "heat":
-            return HVACMode.HEAT
+        if eti_mode == "off":
+            return HVACMode.OFF
+        elif eti_mode == "manual":
+            # In base alla stagione, manuale diventa HEAT o COOL
+            if self._thermostat._season == "winter":
+                return HVACMode.HEAT
+            elif self._thermostat._season == "summer":
+                return HVACMode.COOL
+            return HVACMode.HEAT  # fallback
         elif eti_mode == "auto":
             return HVACMode.AUTO
-        elif eti_mode == "cool":
-            return HVACMode.COOL
-        return HVACMode.OFF
+        # JOLLY (3) non lo gestiamo, lo trattiamo come AUTO
+        return HVACMode.AUTO
 
     @property
     def hvac_action(self) -> Optional[HVACAction]:
@@ -189,9 +195,9 @@ class DomoClimateEntity(ClimateEntity):
         if hvac_mode == HVACMode.OFF:
             await self._thermostat.async_set_hvac_mode("off")
         elif hvac_mode == HVACMode.HEAT:
-            await self._thermostat.async_set_hvac_mode("heat")
+            await self._thermostat.async_set_hvac_mode("manual")
         elif hvac_mode == HVACMode.COOL:
-            await self._thermostat.async_set_hvac_mode("cool")
+            await self._thermostat.async_set_hvac_mode("manual")
         else:  # AUTO o qualsiasi altra cosa
             await self._thermostat.async_set_hvac_mode("auto")
 
