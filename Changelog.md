@@ -39,3 +39,8 @@ All notable changes to this project will be documented in this file.
 - Security Areas
 - Security Inputs
 - security Outputs
+
+## [1.3.0] - 2026-04-12
+
+### Added
+- Offline/Online status notifications for the ETI/DOMO server
