@@ -54,7 +54,7 @@ All notable changes to this project will be documented in this file.
 ### 🌡️ Automatic Thermal Profile added fature
 
 - **Thermal profile exposure** for climate entities
-- **Human-readable profile decoding**: new `thermal_profile_schedule` attribute that condenses the 96 quarter-hour slots into compressed time ranges (e.g. `00:00-09:00: t3 | 30.0°C`), one line per range, ready for quick consultation and automations.
+- **Readable profile decoding**: new `thermal_profile_schedule` attribute that condenses the 96 quarter-hour slots into compressed time ranges (e.g. `00:00-09:00: t3 | 30.0°C`), one line per range, ready for quick consultation and automations.
 - **Currently active set-point**: new `scheduled_setpoint` attribute, calculated in real time from the thermal profile according to the current time — useful to know "what temperature it should be right now" without having to consult the scheduler.
 - **More readable state attributes**: `mode` and `status` now return textual labels instead of raw numeric codes.
 - **Automatic profile refresh on restart**: thermostats already in AUTO mode now actively request the complete thermal profile and expose it immediately.
