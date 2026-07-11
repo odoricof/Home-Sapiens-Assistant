@@ -95,8 +95,8 @@ class DomoThermostat:
         self._mode = thermo_data.get("mode", 0)
         self._status = thermo_data.get("status", 0)
         self._season = thermo_data.get("season", "winter")
-        self._temperature = thermo_data.get("temp_dec", 0)
-        self._set_point = thermo_data.get("set_point", 200)
+        self._temperature = thermo_data.get("temp_dec")
+        self._set_point = thermo_data.get("set_point")
         self._fan_speed = thermo_data.get("fan_speed")
         
         self._zone = zone
@@ -136,14 +136,14 @@ class DomoThermostat:
         return self._room        
 
     @property
-    def current_temperature(self) -> float:
-        """Restituisce la temperatura corrente in °C."""
-        return self._temperature / 10.0 if self._temperature else 0.0
+    def current_temperature(self) -> Optional[float]:
+        """Restituisce la temperatura corrente in °C, o None se non ancora nota."""
+        return self._temperature / 10.0 if self._temperature is not None else None
 
     @property
-    def target_temperature(self) -> float:
-        """Restituisce la temperatura target in °C."""
-        return self._set_point / 10.0 if self._set_point else 0.0
+    def target_temperature(self) -> Optional[float]:
+        """Restituisce la temperatura target in °C, o None se non ancora nota."""
+        return self._set_point / 10.0 if self._set_point is not None else None
 
     @property
     def current_humidity(self) -> Optional[float]:
