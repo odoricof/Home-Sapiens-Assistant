@@ -14,7 +14,7 @@ Custom integration for **Home Assistant** to interface with **Bpt Home Automatio
 
 ## Features
 
-This integration allows Home Assistant to monitor and control a CAME Domotic system.
+This integration allows Home Assistant to monitor and control a Bpt Home Automation / CAME Domotic system.
 
 Currently supported:
 
@@ -121,7 +121,7 @@ In this example, each scenario features a unique combination of areas, enabling 
 
 This is an **independent project** developed by [@odoricof](https://github.com/odoricof).
 
-- Not affiliated with or endorsed by CAME
+- Not affiliated with or endorsed by manufacturer of ETI/DOMO.
 - Uses publicly observable HTTP communication from the web interface
 - Compatibility with all firmware versions is not guaranteed
 

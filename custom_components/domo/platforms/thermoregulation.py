@@ -10,7 +10,7 @@ Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
 """
 from __future__ import annotations
-
+from datetime import datetime
 import logging
 from typing import Dict, Any, Optional, List
 
@@ -28,8 +28,54 @@ THERMO_MODES = {
     3: "jolly",
 }
 
+# Mappa fissa: carattere del profilo -> quale set-point (t1/t2/t3) usare
+PROFILE_CHAR_TO_SETPOINT = {
+    "1": "t1",
+    "2": "t1",
+    "3": "t2",
+    "4": "t2",
+    "5": "t3",
+}
+
+QUARTER_MINUTES = 15
+
 # Dizionario globale per tenere traccia di tutti i termostati
 _THERMOSTATS: dict[int, "DomoThermostat"] = {}
+
+def _slot_to_time_str(slot_index: int) -> str:
+    """Converte l'indice di quarto d'ora (0-95) in stringa HH:MM."""
+    total_minutes = slot_index * QUARTER_MINUTES
+    hour = (total_minutes // 60) % 24
+    minute = total_minutes % 60
+    return f"{hour:02d}:{minute:02d}"
+
+
+def decode_thermal_profile(profile_data: str, t1: Optional[int], t2: Optional[int], t3: Optional[int]) -> Dict[str, str]:
+    """Decodifica la stringa profilo (96 caratteri) in blocchi orari compressi (una riga per fascia)."""
+    if not profile_data:
+        return {}
+    setpoint_values = {"t1": t1, "t2": t2, "t3": t3}
+    def _char_to_temp(ch: str):
+        name = PROFILE_CHAR_TO_SETPOINT.get(ch)
+        if name is None:
+            return None, None
+        temp_dec = setpoint_values.get(name)
+        return name, (temp_dec / 10.0 if temp_dec is not None else None)
+    blocks = {}
+    current_name, current_temp, start = None, None, 0
+    for i, ch in enumerate(profile_data):
+        name, temp = _char_to_temp(ch)
+        if current_name is None:
+            current_name, current_temp, start = name, temp, i
+            continue
+        if name != current_name:
+            key = f"{_slot_to_time_str(start)}-{_slot_to_time_str(i)}"
+            blocks[key] = f"{current_name} | {current_temp}°C"
+            current_name, current_temp, start = name, temp, i
+    if current_name is not None:
+        key = f"{_slot_to_time_str(start)}-24:00"
+        blocks[key] = f"{current_name} | {current_temp}°C"
+    return blocks
 
 
 async def discover_thermostats(gateway):
@@ -63,6 +109,7 @@ async def discover_thermostats(gateway):
                     )
                     _THERMOSTATS[thermo.get("act_id")] = thermo_obj
                     thermostats_found.append(thermo_obj)
+                    await refresh_auto_profile(gateway, thermo_obj)
         
         _LOGGER.info("THERMOSTATS discovered %d devices", len(thermostats_found))
         return thermostats_found
@@ -71,6 +118,29 @@ async def discover_thermostats(gateway):
         _LOGGER.error("THERMOSTATS discovery failed: %s", err)
         return None
 
+async def refresh_auto_profile(gateway, thermostat: "DomoThermostat"):
+    """Se il termostato è già in AUTO, ri-manda mode=auto per forzare l'invio del profilo termico completo."""
+    if thermostat._mode != 2:  # non è in auto, niente da fare
+        return None
+    if thermostat._set_point is None:
+        _LOGGER.debug(
+            "THERMOSTAT %s: set_point non ancora noto, refresh profilo saltato",
+            thermostat.act_id,
+        )
+        return None
+    try:
+        resp = await gateway.tx_command({
+            "cmd_name": "thermo_zone_config_req",
+            "act_id": thermostat.act_id,
+            "mode": 2,  # auto
+            "set_point": thermostat._set_point,
+            "extended_infos": 0,
+        }, resp_command=None)
+        _LOGGER.debug("THERMOSTAT %s refresh profilo response: %s", thermostat.act_id, resp)
+        return resp
+    except Exception as err:
+        _LOGGER.error("THERMOSTAT %s refresh profilo failed: %s", thermostat.act_id, err)
+        return None
 
 def get_thermostat(act_id: int) -> Optional["DomoThermostat"]:
     """Restituisce un oggetto termostato dal suo act_id."""
@@ -106,6 +176,11 @@ class DomoThermostat:
         self._hygro = thermo_data.get("hygro")
         self._f3a_window_open = thermo_data.get("f3a", {}).get("window_open", 0) == 1
         self._f3a_presence = thermo_data.get("f3a", {}).get("presence", 0) == 1
+        self._profile_info = thermo_data.get("profile_info", {}) or {}
+        self._t1 = thermo_data.get("t1")
+        self._t2 = thermo_data.get("t2")
+        self._t3 = thermo_data.get("t3")
+        self._antifreeze = thermo_data.get("antifreeze")
         
         _LOGGER.debug("THERMOSTAT created: %s (ID: %d)", 
                      self._name, self._act_id)
@@ -136,12 +211,12 @@ class DomoThermostat:
         return self._room        
 
     @property
-    def current_temperature(self) -> Optional[float]:
+    def current_temperature(self) -> float:
         """Restituisce la temperatura corrente in °C, o None se non ancora nota."""
         return self._temperature / 10.0 if self._temperature is not None else None
 
     @property
-    def target_temperature(self) -> Optional[float]:
+    def target_temperature(self) -> float:
         """Restituisce la temperatura target in °C, o None se non ancora nota."""
         return self._set_point / 10.0 if self._set_point is not None else None
 
@@ -175,6 +250,13 @@ class DomoThermostat:
         return "idle"
 
     @property
+    def status(self) -> str:
+        """Restituisce lo stato testuale (off/idle/active)."""
+        if self._mode == 0:
+            return "off"
+        return "active" if self._status == 1 else "idle"
+
+    @property
     def fan_mode(self) -> Optional[str]:
         """Restituisce la modalità ventola."""
         if self._fan_speed is None:
@@ -191,7 +273,53 @@ class DomoThermostat:
     def is_occupied(self) -> bool:
         """Restituisce True se presenza rilevata."""
         return self._f3a_presence
+        
+    @property
+    def profile_data(self) -> Optional[str]:
+        """Restituisce la stringa grezza del profilo termico (96 caratteri)."""
+        return self._profile_info.get("profile_data")
+        
+    @property
+    def thermal_profile_schedule(self) -> List[Dict[str, Any]]:
+        """Blocchi orari compressi decodificati dal profilo termico."""
+        return decode_thermal_profile(self.profile_data, self._t1, self._t2, self._t3)        
+        
+    @property
+    def t1(self) -> Optional[float]:
+        return self._t1 / 10.0 if self._t1 is not None else None
 
+    @property
+    def t2(self) -> Optional[float]:
+        return self._t2 / 10.0 if self._t2 is not None else None
+
+    @property
+    def t3(self) -> Optional[float]:
+        return self._t3 / 10.0 if self._t3 is not None else None
+        
+    @property
+    def antifreeze(self) -> Optional[float]:
+        return self._antifreeze / 10.0 if self._antifreeze is not None else None    
+        
+    @property
+    def scheduled_setpoint(self) -> Optional[float]:
+        """Restituisce il set-point (°C) attualmente in vigore secondo il profilo termico."""
+        profile_data = self.profile_data
+        if not profile_data:
+            return None
+
+        now = datetime.now()
+        quarter_index = now.hour * 4 + now.minute // 15
+        if quarter_index >= len(profile_data):
+            return None
+
+        char = profile_data[quarter_index]
+        setpoint_name = PROFILE_CHAR_TO_SETPOINT.get(char)
+        if setpoint_name is None:
+            return None
+
+        setpoint_dec = getattr(self, f"_{setpoint_name}")
+        return setpoint_dec / 10.0 if setpoint_dec is not None else None        
+        
     @property
     def support_fan(self) -> bool:
         """Restituisce True se supporta ventola."""
@@ -199,6 +327,9 @@ class DomoThermostat:
 
     async def async_set_hvac_mode(self, hvac_mode: str):
         """Imposta la modalità HVAC."""
+        if self._set_point is None:
+            _LOGGER.debug("THERMOSTAT %s: set_point non ancora noto, comando ignorato", self.name)
+            return False        
         mode_map = {v: k for k, v in THERMO_MODES.items()}
         mode_code = mode_map.get(hvac_mode, 0)
         
@@ -227,6 +358,26 @@ class DomoThermostat:
         
         await self._gateway.tx_command(payload, resp_command=None)
         return True
+
+    async def async_set_manual_temperature(self, temperature: float):
+        """Passa in manuale impostando contestualmente il set-point desiderato.
+        Un'unica richiesta: evita la corsa a due comandi separati (mode + set_point)."""
+        set_point = int(temperature * 10)
+
+        payload = {
+            "cmd_name": "thermo_zone_config_req",
+            "act_id": self._act_id,
+            "mode": 1,  # manual
+            "set_point": set_point,
+            "extended_infos": 0
+        }
+
+        await self._gateway.tx_command(payload, resp_command=None)
+        return True 
+
+
+
+
 
     async def async_set_fan_mode(self, fan_mode: str):
         """Imposta la modalità ventola."""
@@ -266,13 +417,22 @@ class DomoThermostat:
         
         # Aggiorna dati aggiuntivi
         if "hygro" in data:
-            self._hygro = data.get("hygro")
-        
+            self._hygro = data.get("hygro")        
         if "f3a" in data:
             f3a = data["f3a"]
             self._f3a_window_open = f3a.get("window_open", 0) == 1
             self._f3a_presence = f3a.get("presence", 0) == 1
-        
+        if "profile_info" in data:
+            self._profile_info = data.get("profile_info") or {}
+        if "t1" in data:
+            self._t1 = data.get("t1")
+        if "t2" in data:
+            self._t2 = data.get("t2")
+        if "t3" in data:
+            self._t3 = data.get("t3")  
+        if "antifreeze" in data:
+            self._antifreeze = data.get("antifreeze")            
+                
         _LOGGER.debug("🌡️Thermostat %s state updated", self.name)
         return True
 

@@ -112,7 +112,11 @@ class DomoClimateEntity(ClimateEntity):
         # Aggiungi TARGET_TEMPERATURE solo se in modalità HEAT o COOL
         if self.hvac_mode in (HVACMode.HEAT, HVACMode.COOL):
             features |= ClimateEntityFeature.TARGET_TEMPERATURE
-        
+        elif self.hvac_mode == HVACMode.AUTO and self._thermostat.scheduled_setpoint is not None:
+            features |= ClimateEntityFeature.TARGET_TEMPERATURE
+        elif self.hvac_mode == HVACMode.OFF and self._thermostat._season == "winter" and self._thermostat.antifreeze is not None:
+            features |= ClimateEntityFeature.TARGET_TEMPERATURE
+            
         return features
 
     @property
@@ -128,6 +132,10 @@ class DomoClimateEntity(ClimateEntity):
     @property
     def target_temperature(self) -> Optional[float]:
         """Return the temperature we try to reach."""
+        if self.hvac_mode == HVACMode.AUTO:
+            return self._thermostat.scheduled_setpoint
+        if self.hvac_mode == HVACMode.OFF and self._thermostat._season == "winter":
+            return self._thermostat.antifreeze       
         return self._thermostat.target_temperature
 
     @property
@@ -184,9 +192,16 @@ class DomoClimateEntity(ClimateEntity):
             "room": self._thermostat.room,
             "window_open": self._thermostat.is_window_open,
             "occupied": self._thermostat.is_occupied,
-            "raw_mode": self._thermostat._mode,
-            "raw_status": self._thermostat._status,
-            "raw_season": self._thermostat._season,
+            "mode": self._thermostat.hvac_mode,
+            "status": self._thermostat.status,
+            "season": self._thermostat._season,
+            #"profile_data": self._thermostat.profile_data,
+            "thermal_profile_schedule": self._thermostat.thermal_profile_schedule,
+            "t1": self._thermostat.t1,
+            "t2": self._thermostat.t2,
+            "t3": self._thermostat.t3,
+            "antifreeze": self._thermostat.antifreeze,
+            "scheduled_setpoint": self._thermostat.scheduled_setpoint,
         }
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
@@ -205,14 +220,16 @@ class DomoClimateEntity(ClimateEntity):
         """Set new target temperature."""
         if ATTR_TEMPERATURE not in kwargs:
             return
-        
-        # Ignora se in modalità AUTO
-        if self.hvac_mode == HVACMode.AUTO:
-            return
-            
+
         temperature = kwargs[ATTR_TEMPERATURE]
         _LOGGER.debug("Setting temperature to %.1f°C", temperature)
-        
+
+        if self.hvac_mode in (HVACMode.AUTO, HVACMode.OFF):
+            # L'utente muove il cursore mentre è in automatico o spento:
+            # passa in manuale assecondando subito il valore richiesto.
+            await self._thermostat.async_set_manual_temperature(temperature)
+            return
+
         await self._thermostat.async_set_temperature(temperature)
 
     async def async_added_to_hass(self):
