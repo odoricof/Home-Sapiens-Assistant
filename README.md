@@ -28,6 +28,8 @@ Currently supported:
    - Areas
    - Inputs
    - Outputs
+   - Scenarios
+   - Trigger and warnings notifications
 - Lights
 - Openings
 - Scenes
