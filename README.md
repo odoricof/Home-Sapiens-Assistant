@@ -28,9 +28,11 @@ Currently supported:
    - Areas
    - Inputs
    - Outputs
+   - Status notifications and alarm triggering
 - Lights
 - Openings
 - Scenes
+- Schedule
 - TVCC
 
 Services:

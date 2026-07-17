@@ -70,3 +70,27 @@ All notable changes to this project will be documented in this file.
 
 - **Merge pull request #4 from brokkolo/patch-1**: Fix false 0°C history dips: climate entities defaulted temp_dec/set_point to 0/200 instead of None
 
+## [1.5.0] - 2026-07-17
+
+# Alarm Panel
+
+Handling of arming when one or more areas of the requested scenario are not ready (open inputs), to prevent the alarm from triggering immediately.
+
+## Implemented Behavior
+
+When the user requests arming (`arm_home` / `arm_night` / `arm_away`) and one or more areas involved in the scenario are not ready:
+
+1. The command is **not** sent immediately to the control panel.
+2. A **30-second** wait period begins, during which the entity shows `ARMING` status.
+3. A push notification is sent to all mobile devices along with a persistent notification in Home Assistant: *"⚠️ Arming pending"*.
+4. If areas become ready before the 30s elapse → arming proceeds immediately and the notification is dismissed.
+5. If 30s expire and areas are still not ready → arming **is still executed**, as requested by the user who was warned.
+6. If the user sends `disarm` during the wait → the arming request is canceled, no command is ever sent to the control panel. The persistent notification is dismissed; the push notification remains on the phone until manually cleared by the user (explicit choice, no automatic recall).
+
+## Push Notifications for Alarm Panel State Changes
+
+1. Added push notification system that informs the user of every state change of the control panel.
+
+# New Features
+
+1. Timer management (Scheduler platform)

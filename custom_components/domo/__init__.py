@@ -27,6 +27,7 @@ from .platforms.thermoregulation import discover_thermostats, handle_thermostat_
 from .platforms.meters import discover_meters, handle_meter_status_update
 from .platforms.openings import discover_openings, handle_opening_status_update
 from .platforms.scenarios import discover_scenarios, handle_scenario_status_update
+from .platforms.scheduler import discover_timers, handle_timer_status_update
 from .platforms.tvcc import discover_tvcc_cameras
 from .services.logger_security_events import SecurityEventsLogger
 from .services.notifications import async_register_notification_services
@@ -60,6 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     gateway.register_event_callback(handle_meter_status_update)
     gateway.register_event_callback(handle_opening_status_update)
     gateway.register_event_callback(handle_scenario_status_update)
+    gateway.register_event_callback(handle_timer_status_update)
     
     await gateway.start()
     await async_register_notification_services(hass, gateway)
@@ -73,6 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await discover_meters(gateway)
     await discover_openings(gateway)
     await discover_scenarios(gateway)
+    await discover_timers(gateway)
     await discover_tvcc_cameras(gateway)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)    
     

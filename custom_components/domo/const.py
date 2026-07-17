@@ -37,4 +37,5 @@ PLATFORMS = [
     "switch",
     "cover",
     "camera",
+    "text",
 ]

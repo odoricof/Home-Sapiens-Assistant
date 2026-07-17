@@ -10,7 +10,7 @@ Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
 """
 
-
+import asyncio
 import logging
 import time
 from homeassistant.components.alarm_control_panel import (
@@ -83,7 +83,16 @@ INPUT_STATUS_MAP = {
 }
 
 SECURITY_DOMAIN = "alarm_control_panel"
-
+PENDING_ARM_DELAY = 30
+AREA_NOT_READY_STATUS = {32, 33, 48, 96}
+SCENARIO_INDEX = {"away": 0, "night": 1, "home": 2}
+STATE_LABELS = {
+    AlarmControlPanelState.ARMED_AWAY: "ATTIVO FUORI CASA",
+    AlarmControlPanelState.ARMED_NIGHT: "ATTIVO NOTTE",
+    AlarmControlPanelState.ARMED_HOME: "ATTIVO IN CASA",
+    AlarmControlPanelState.ARMED_CUSTOM_BYPASS: "ATTIVO PARZIALMENTE",
+    AlarmControlPanelState.DISARMED: "DISATTIVO",
+}
 
 # --------------------------------------------------
 # SETUP / DISCOVERY
@@ -121,8 +130,12 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         self._attr_name = device.name
         self._attr_should_poll = False
         self._last_armed_state = None
+        self._last_notified_state = None
+        self._notif_state_initialized = False
         self._alarm_notified = False
         self._alarm_notification_id = None
+        self._pending_arm = None
+        self._pending_arm_notification_id = None
         
     @property
     def device_info(self):
@@ -202,7 +215,11 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
             self._last_valid_state = AlarmControlPanelState.TRIGGERED
             return self._last_valid_state
 
-        # 1. ARMING
+        # 1. ARMING (in attesa lato integrazione per aree non pronte)
+        if self._pending_arm is not None:
+            return AlarmControlPanelState.ARMING
+
+        # 1b. ARMING (gestito direttamente dalla centrale)
         if central_status in (4096, 4352, 12288, 14336):
             return AlarmControlPanelState.ARMING
 
@@ -218,25 +235,41 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
             self._last_armed_state = None
             return AlarmControlPanelState.DISARMED
 
-        # 4. matching con scenari
-        if central_status in (8192, 9216):
-            scenarios = getattr(device, "_scenarios", {})
-
-            if armed_now == set(scenarios.get(0, {}).get("areas", [])):
+        # 4. matching esatto con scenari (solo se distinguibili)      
+        scenarios = getattr(device, "_scenarios", {})
+        scenario_areas = {
+            i: frozenset(scenarios.get(i, {}).get("areas", [])) for i in (0, 1, 2)
+        }
+        scenarios_are_unique = len(set(scenario_areas.values())) == len(scenario_areas)
+        
+        if scenarios_are_unique:
+            if armed_now == scenario_areas[0]:
                 self._last_armed_state = AlarmControlPanelState.ARMED_AWAY
                 return self._last_armed_state
-                
-            if armed_now == set(scenarios.get(1, {}).get("areas", [])):
+
+            if armed_now == scenario_areas[1]:
                 self._last_armed_state = AlarmControlPanelState.ARMED_NIGHT
                 return self._last_armed_state
-                
-            if armed_now == set(scenarios.get(2, {}).get("areas", [])):
+
+            if armed_now == scenario_areas[2]:
                 self._last_armed_state = AlarmControlPanelState.ARMED_HOME
                 return self._last_armed_state
-        
-        # 5. Se abbiamo aree armate ma non matchiamo (sensori attivi), mantieni ultimo stato
-        if armed_now and self._last_armed_state:
+
+        # 5. Fallback matching
+        known_areas = set(data.get("known_area_ids", []))
+        if known_areas and armed_now == known_areas:
+            self._last_armed_state = AlarmControlPanelState.ARMED_AWAY
             return self._last_armed_state
+
+        if known_areas:
+            self._last_armed_state = AlarmControlPanelState.ARMED_CUSTOM_BYPASS
+            return self._last_armed_state
+
+        _LOGGER.warning(
+            "Impossibile determinare alarm_state | central_status=%s | armed_now=%s | last_armed_state=%s",
+            central_status, armed_now, self._last_armed_state,
+        )
+        return None
 
     # --------------------------------------------------
     # UPDATE
@@ -294,7 +327,25 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
             if central_status == 8192 and self._alarm_notification_id:
                 self.hass.async_create_task(self._clear_alarm_notification())
                 self._alarm_notified = False
-        
+                
+            # Se c'è un inserimento in attesa, verifica se le aree sono diventate pronte
+            if self._pending_arm is not None:
+                ready, _ = self._scenario_areas_ready(self._pending_arm["scenario_index"])
+                if ready:
+                    self._pending_arm["ready_event"].set()                
+
+        # Notifica push (solo mobile) su cambio stato del pannello, qualunque
+        # sia l'origine (tastiera, app Domo, comando HA). Il primo giro dopo
+        # l'avvio stabilisce solo la baseline, senza notificare.
+        new_state = self.alarm_state
+        if new_state not in (None, AlarmControlPanelState.ARMING, AlarmControlPanelState.TRIGGERED):
+            if not self._notif_state_initialized:
+                self._notif_state_initialized = True
+                self._last_notified_state = new_state
+            elif new_state != self._last_notified_state:
+                self._last_notified_state = new_state
+                self.hass.async_create_task(self._send_state_change_notification(new_state))
+
         self.async_write_ha_state()
 
     # --------------------------------------------------
@@ -302,31 +353,123 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
     # --------------------------------------------------
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         """Send disarm command."""
+        if self._pending_arm is not None:
+            _LOGGER.info(
+                "Disarm richiesto durante attesa inserimento '%s': richiesta annullata",
+                self._pending_arm.get("mode"),
+            )
+            await self._async_cancel_pending_arm()
+            return
         await self._device.disarm(code)
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
         """Send arm home command."""
-        await self._device.arm_home(code)
-        
+        await self._async_handle_arm_request(SCENARIO_INDEX["home"], "home", code)
+
     async def async_alarm_arm_night(self, code: str | None = None) -> None:
         """Send arm night command."""
-        await self._device.arm_night(code)
-        
+        await self._async_handle_arm_request(SCENARIO_INDEX["night"], "night", code)
+
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         """Send arm away command."""
-        await self._device.arm_away(code)
-        
-    async def reset_event_memory(self, code: str | None = None) -> None:
-        _LOGGER.info(">>> PANEL.reset_event_memory called with code: %s", code)
-        """Reset event memory."""
-        await self._device.reset_event_memory(code)
+        await self._async_handle_arm_request(SCENARIO_INDEX["away"], "away", code)
 
-    async def silence(self, code: str | None = None) -> None:
-        """Silence alarm."""
-        await self._device.silence(code)        
-        
-        
-        
+    # --------------------------------------------------
+    # GESTIONE INSERIMENTO CON AREE NON PRONTE
+    # --------------------------------------------------
+    def _scenario_areas_ready(self, scenario_index: int) -> tuple[bool, list[str]]:
+        """Verifica se tutte le aree coinvolte in uno scenario sono pronte.
+
+        Ritorna (pronto, nomi_aree_non_pronte).
+        """
+        device = self._device
+        data = getattr(device, "_last_snapshot", None)
+        scenarios = getattr(device, "_scenarios", {})
+        target_area_ids = set(scenarios.get(scenario_index, {}).get("areas", []))
+
+        if not data or not target_area_ids:
+            return True, []
+
+        not_ready = []
+        for area in data.get("areas", []):
+            if area.get("area_id") in target_area_ids and area.get("status") in AREA_NOT_READY_STATUS:
+                not_ready.append(area.get("name", f"area_{area.get('area_id')}"))
+
+        return (len(not_ready) == 0), not_ready
+
+    async def _async_handle_arm_request(self, scenario_index: int, mode: str, code: str | None) -> None:
+        """Gestisce una richiesta di inserimento, con attesa se ci sono aree non pronte."""
+        # Una nuova richiesta di inserimento annulla un'eventuale attesa precedente
+        await self._async_cancel_pending_arm()
+
+        ready, not_ready_areas = self._scenario_areas_ready(scenario_index)
+
+        if ready:
+            await self._async_send_arm_command(mode, code)
+            return
+
+        _LOGGER.info(
+            "Inserimento '%s' richiesto con aree non pronte (%s): avvio attesa di %ss",
+            mode, ", ".join(not_ready_areas), PENDING_ARM_DELAY,
+        )
+
+        self._pending_arm = {
+            "mode": mode,
+            "code": code,
+            "scenario_index": scenario_index,
+            "ready_event": asyncio.Event(),
+        }
+        self.async_write_ha_state()
+
+        await self._send_pending_arm_notification(not_ready_areas)
+
+        self._pending_arm["task"] = self.hass.async_create_task(
+            self._pending_arm_watcher(scenario_index, mode, code)
+        )
+
+    async def _pending_arm_watcher(self, scenario_index: int, mode: str, code: str | None) -> None:
+        """Attende che le aree diventino pronte oppure
+        che scada PENDING_ARM_DELAY. In entrambi i casi l'inserimento viene eseguito,
+        a meno che la richiesta non sia stata annullata da un disarm nel frattempo.
+        """
+        ready_event = self._pending_arm["ready_event"]
+        try:
+            await asyncio.wait_for(ready_event.wait(), timeout=PENDING_ARM_DELAY)
+            _LOGGER.info("Aree pronte, avvio inserimento '%s'", mode)
+        except asyncio.TimeoutError:
+            _LOGGER.info(
+                "Timeout di %ss scaduto: inserimento '%s' forzato come richiesto dall'utente",
+                PENDING_ARM_DELAY, mode,
+            )
+
+        await self._async_send_arm_command(mode, code)
+        await self._clear_pending_arm_notification()
+        self._pending_arm = None
+        self.async_write_ha_state()
+
+    async def _async_cancel_pending_arm(self) -> None:
+        """Annulla una richiesta di inserimento in attesa, se presente."""
+        if self._pending_arm is None:
+            return
+
+        task = self._pending_arm.get("task")
+        self._pending_arm = None
+
+        if task and not task.done():
+            task.cancel()
+
+        await self._clear_pending_arm_notification()
+        self.async_write_ha_state()
+
+    async def _async_send_arm_command(self, mode: str, code: str | None) -> None:
+        """Invia il comando di inserimento reale alla centrale."""
+        if mode == "away":
+            await self._device.arm_away(code)
+        elif mode == "night":
+            await self._device.arm_night(code)
+        elif mode == "home":
+            await self._device.arm_home(code) 
+             
     # --------------------------------------------------
     # ATTRIBUTI EXTRA
     # --------------------------------------------------
@@ -497,6 +640,104 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         except Exception as err:
             _LOGGER.error("Failed to create persistent notification: %s", err)
             
+    async def _send_state_change_notification(self, state) -> None:
+        """Invia una notifica push al cambio di stato del pannello (arm away/night/home/custom bypass, disarm)."""
+        label = STATE_LABELS.get(state, str(state))
+        title = "🛡️ CENTRALE ANTIFURTO" if state != AlarmControlPanelState.DISARMED else "🛡️ CENTRALE ANTIFURTO"
+        msg = f"Stato: {label}"
+
+        all_services = self.hass.services.async_services()
+        mobile_app_services = [
+            service for service in all_services.get("notify", [])
+            if service.startswith("mobile_app_")
+        ]
+
+        if not mobile_app_services:
+            _LOGGER.warning("Nessun dispositivo mobile_app registrato, notifica cambio stato ignorata")
+            return
+
+        for service in mobile_app_services:
+            try:
+                await self.hass.services.async_call(
+                    "notify",
+                    service,
+                    {
+                        "title": title,
+                        "message": msg,
+                        "data": {
+                            "channel": "alarm",
+                        },
+                    },
+                    blocking=False,
+                )
+            except Exception as err:
+                _LOGGER.error("Failed to send state-change push notification to %s: %s", service, err)            
+            
+            
+    async def _send_pending_arm_notification(self, not_ready_areas):
+        """Invia notifica push/persistente per inserimento in attesa con ingressi aperti."""
+        aree = ", ".join(not_ready_areas) if not_ready_areas else "sconosciuta"
+        msg = f"Attenzione: inserimento in corso con ingressi aperti (area: {aree})"
+
+        all_services = self.hass.services.async_services()
+        mobile_app_services = [
+            service for service in all_services.get("notify", [])
+            if service.startswith("mobile_app_")
+        ]
+
+        if mobile_app_services:
+            for service in mobile_app_services:
+                try:
+                    await self.hass.services.async_call(
+                        "notify",
+                        service,
+                        {
+                            "title": "⚠️ INSERIMENTO IN ATTESA",
+                            "message": msg,
+                            "data": {
+                                "priority": "high",
+                                "channel": "alarm",
+                            }
+                        },
+                        blocking=False,
+                    )
+                except Exception as err:
+                    _LOGGER.error("Failed to send pending-arm push notification to %s: %s", service, err)
+        else:
+            _LOGGER.warning("Nessun dispositivo mobile_app registrato, notifica pending-arm ignorata")
+
+        self._pending_arm_notification_id = f"pending_arm_{int(time.time())}"
+        try:
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": "⚠️ INSERIMENTO IN ATTESA",
+                    "message": msg,
+                    "notification_id": self._pending_arm_notification_id
+                },
+                blocking=True,
+            )
+        except Exception as err:
+            _LOGGER.error("Failed to create pending-arm persistent notification: %s", err)
+
+    async def _clear_pending_arm_notification(self):
+        """Rimuove la notifica di inserimento in attesa."""
+        if self._pending_arm_notification_id:
+            try:
+                await self.hass.services.async_call(
+                    "persistent_notification",
+                    "dismiss",
+                    {
+                        "notification_id": self._pending_arm_notification_id
+                    },
+                    blocking=True,
+                )
+                _LOGGER.debug("Pending-arm notification cleared")
+            except Exception as err:
+                _LOGGER.error("Failed to clear pending-arm notification: %s", err)
+            self._pending_arm_notification_id = None
+
             
     async def _clear_alarm_notification(self):
         """Rimuove la notifica persistente quando l'allarme termina."""
@@ -513,4 +754,6 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
                 self._alarm_notification_id = None
                 _LOGGER.debug("Alarm notification cleared")
             except Exception as err:
-                _LOGGER.error("Failed to clear notification: %s", err)            
+                _LOGGER.error("Failed to clear notification: %s", err)
+                
+                
