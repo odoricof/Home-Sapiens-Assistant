@@ -13,6 +13,7 @@ https://github.com/odoricof/Home-Sapiens-Assistant/issues
 import asyncio
 import logging
 import time
+from datetime import datetime
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
     AlarmControlPanelState,
@@ -583,12 +584,13 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
     async def _send_alarm_notifications(self, violated_inputs):
         """Invia notifiche push e persistenti per l'allarme."""
         
+        now = datetime.now().strftime("%H:%M")
         # Prepara il messaggio
         if len(violated_inputs) == 1:
-            msg = f"Sensore violato: {violated_inputs[0]['name']} (area {violated_inputs[0]['area']})"
+            msg = f"Sensore violato: {violated_inputs[0]['name']} (area {violated_inputs[0]['area']}) - {now}"
         else:
             sensori = [f"{i['name']} (area {i['area']})" for i in violated_inputs]
-            msg = f"Sensori violati: {', '.join(sensori)}"
+            msg = f"Sensori violati: {', '.join(sensori)} - {now}"
         
         # 1. Notifiche push a TUTTI i dispositivi mobile_app
         # Ottieni tutti i servizi notify.mobile_app_*
@@ -608,13 +610,21 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
                             "title": "🚨 ALLARME IN CORSO!",
                             "message": msg,
                             "data": {
+                                # Android
                                 "priority": "high",
-                                "ttl": 0,
-                                "importance": "max",
-                                "vibrate": [500, 500, 500],
+                                "channel": "alarm_v2",
+                                "importance": "high",
+                                "vibrationPattern": "500, 500, 500, 500",
                                 "color": "#FF0000",
-                                "channel": "alarm",
-                                "sound": "alarm.caf"
+                                "led_color": "red",
+                                "sticky": "true",
+                                "persistent": "true",
+                                "tag": "alarm_active",
+                                # iOS
+                                "push": {
+                                    "sound": {"name": "default", "critical": 1, "volume": 1.0},
+                                    "interruption-level": "critical"
+                                }
                             }
                         },
                         blocking=False  # non bloccare per inviare a più dispositivi
@@ -641,10 +651,11 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
             _LOGGER.error("Failed to create persistent notification: %s", err)
             
     async def _send_state_change_notification(self, state) -> None:
-        """Invia una notifica push al cambio di stato del pannello (arm away/night/home/custom bypass, disarm)."""
+        """Invia una notifica push al cambio di stato del pannello"""
         label = STATE_LABELS.get(state, str(state))
-        title = "🛡️ CENTRALE ANTIFURTO" if state != AlarmControlPanelState.DISARMED else "🛡️ CENTRALE ANTIFURTO"
-        msg = f"Stato: {label}"
+        now = datetime.now().strftime("%H:%M")
+        title = "🛡️ CENTRALE ANTIFURTO"
+        msg = f"Stato: {label} - {now}"
 
         all_services = self.hass.services.async_services()
         mobile_app_services = [

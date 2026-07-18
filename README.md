@@ -28,7 +28,7 @@ Currently supported:
    - Areas
    - Inputs
    - Outputs
-   - Status notifications and alarm triggering
+   - Trigger and warnings notifications
 - Lights
 - Openings
 - Scenes
