@@ -1,30 +1,30 @@
+
 name: AI Translate README
 
 on:
-  # Attivazione automatica su push al branch main (se modifichi README.md)
   push:
     branches: [ main ]
     paths:
       - 'README.md'
-  # Attivazione manuale dall'interfaccia GitHub Actions
   workflow_dispatch:
     inputs:
       target_lang:
-        description: 'Lingua di destinazione (es. Italian, French, Spanish)'
+        description: 'Target language (es. Italian, French, Spanish)'
         required: false
         default: 'Italian'
         type: string
 
 permissions:
   contents: write
-  pull-requests: write
-  models: read
 
 jobs:
   translate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Importante per avere tutti i commit
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Translate to Italian
         uses: FidelusAleksander/ai-translate-action@v1
@@ -37,25 +37,28 @@ jobs:
             Do not translate code blocks, commands, or URLs.
             Preserve the Markdown syntax and badge links exactly as they are.
 
-      - name: Save translated file
+      - name: Save and commit translation
         run: |
-          # Il nome del file sarà README.<codice_lingua>.md
-          # Per semplicità usiamo 'it' se la lingua è Italian, altrimenti estrai prime due lettere
+          # Configura git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Determina il codice lingua (es. 'it' per Italian)
           LANG_CODE="it"
           if [[ "${{ github.event.inputs.target_lang || 'Italian' }}" != "Italian" ]]; then
             LANG_CODE=$(echo "${{ github.event.inputs.target_lang || 'Italian' }}" | cut -c1-2 | tr '[:upper:]' '[:lower:]')
           fi
+          
+          # Salva il file tradotto
           echo "${{ steps.translate_it.outputs.translated-text }}" > "README.${LANG_CODE}.md"
-
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
-          commit-message: "docs: update ${{ github.event.inputs.target_lang || 'Italian' }} translation of README"
-          title: "docs: update ${{ github.event.inputs.target_lang || 'Italian' }} translation of README"
-          branch: docs/update-translation
-          add-paths: "README.*.md"
-          delete-branch: true
-          labels: documentation
-          body: |
-            Traduzione automatica generata dall'AI.
-            **Per favore rivedere il contenuto prima di mergiare.**
+          
+          # Aggiungi e committa
+          git add "README.${LANG_CODE}.md"
+          
+          # Verifica se ci sono cambiamenti prima di committare
+          if git diff --staged --quiet; then
+            echo "Nessuna modifica da committare"
+          else
+            git commit -m "docs: update ${{ github.event.inputs.target_lang || 'Italian' }} translation"
+            git push
+          fi
