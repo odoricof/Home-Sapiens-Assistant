@@ -1,0 +1,40 @@
+name: AI Translate README
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'README.md'
+
+permissions:
+  contents: write
+  pull-requests: write
+  models: read
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Translate to Italian
+        uses: FidelusAleksander/ai-translate-action@v1
+        id: translate_it
+        with:
+          text-file: "README.md"
+          target-language: "Italian"
+          custom-instructions: "Keep technical terms like 'Home Assistant', 'HACS', 'ETI/DOMO' in English. Don't translate code blocks."
+          
+      - name: Save translation
+        run: |
+          echo "${{ steps.translate_it.outputs.translated-text }}" > README.it.md
+          
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "docs: update Italian translation of README"
+          title: "docs: update Italian translation of README"
+          branch: docs/update-it-readme
+          add-paths: "README.it.md"
+          delete-branch: true
+          labels: documentation
