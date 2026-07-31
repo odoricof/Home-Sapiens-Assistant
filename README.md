@@ -1,3 +1,8 @@
+### 🌐 Lingua / Language
+- [English](README.md) | [Italiano](README.it.md)
+
+---
+
 [![Current release](https://img.shields.io/github/release/odoricof/Home-Sapiens-Assistant.svg?style=plastic&label=Current%20release)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=plastic)](https://github.com/odoricof/Home-Sapiens-Assistant)
 [![HACS Repository](https://img.shields.io/badge/HACS_Repository-%2341BDF5.svg?style=plastic&logo=homeassistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=odoricof&repository=Home-Sapiens-Assistant&category=integration)  
@@ -21,7 +26,12 @@ Currently supported:
 - Activations
 - Analogic inputs
 - Climate control
+   - Fan coils
+   - Thermal Profile Management
+   - Full support for all read and write functions
 - Digital inputs
+- Irrigation
+   - Full support for all read and write functions
 - Energy meters
 - Fan coils
 - Intrusion alarm panel
@@ -36,11 +46,11 @@ Currently supported:
 - Schedule
 - TVCC
 
-Services:
+Additional Services:
 
 - Offline/Online status notifications for the ETI/DOMO server
 - Weekly Security event log
-
+- Local backup and restore of all thermal profiles for both heating and cooling seasons
 ---
 
 ## How It Works

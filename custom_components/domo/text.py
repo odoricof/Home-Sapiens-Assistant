@@ -1,6 +1,10 @@
 """
 domo/text.py
 
+Entities fed by:
+- platforms/thermoregulation.py
+- platforms/scheduler.py
+
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
 License: MIT
@@ -11,6 +15,7 @@ https://github.com/odoricof/Home-Sapiens-Assistant/issues
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -27,8 +32,17 @@ from .platforms.scheduler import (
     get_all_timers,
     async_set_timer_timetable,
 )
+from .platforms.thermoregulation import (
+    DomoThermostat,
+    get_all_thermostats as get_all_thermostats_thermo,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# ============================================================
+# ===== SCHEDULER (timer) =====
+# ============================================================
 
 _SLOT_PATTERN = re.compile(r"^(|Disabilitato|([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d)$")
 _SLOT_DISABLED_LABEL = "Disabilitato"
@@ -49,7 +63,7 @@ class DomoTimerSlotText(TextEntity):
         self._slot_index = slot_index
         self._attr_unique_id = f"domo_timer_{timer.timer_id}_slot_{slot_index + 1}"
         self._attr_name = f"Slot {slot_index + 1}"
-        
+
         # Creazione del dispositivo per questo timer
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_timer_{timer.timer_id}")},
@@ -154,8 +168,97 @@ class DomoTimerSlotText(TextEntity):
             self.async_write_ha_state()
 
 
+# ============================================================
+# ===== TERMOSTATI (profilo termico settimanale) =====
+# ============================================================
+
+class DomoThermostatProfileText(TextEntity):
+    """Stringa fasce orarie ('HH:MM-HH:MM=tN,...') per il giorno selezionato in DomoThermostatProfileDaySelect."""
+
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_mode = TextMode.TEXT
+    _attr_native_max = 255
+    _attr_name = "Profilo termico giornaliero (HH:MM-HH:MM=tN,...)"
+    _attr_force_update = True
+
+    def __init__(self, thermostat: DomoThermostat, entry_id: str):
+        self._thermostat = thermostat
+        self._attr_unique_id = f"domo_thermostat_{thermostat.act_id}_profile_text"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry_id}_climate_{thermostat.unique_id}")},
+        )
+        self._pending_display: str | None = None
+        self._attempt_token: int = 0
+
+    @property
+    def native_value(self) -> str:
+        if self._pending_display is not None:
+            return self._pending_display
+        return self._thermostat.profile_draft
+
+# DOPO
+    async def async_set_value(self, value: str) -> None:
+        _LOGGER.debug("T📈EXT %s: async_set_value chiamato con value=%r", self._attr_unique_id, value)
+        self._attempt_token += 1
+        my_token = self._attempt_token
+        self._pending_display = "Attendere..."
+        self.async_write_ha_state()
+        try:
+            ok = await self._thermostat.async_set_thermal_profile(value.strip())
+        except ValueError as err:
+            self._show_transient_message(str(err), my_token)
+            raise HomeAssistantError(str(err)) from err
+        except Exception as err:
+            self._show_transient_message(f"Errore invio thermo_zone_config_req: {err}", my_token)
+            raise HomeAssistantError(f"Errore invio thermo_zone_config_req: {err}") from err
+        _LOGGER.debug("T📈EXT %s: async_set_thermal_profile ha restituito ok=%s", self._attr_unique_id, ok)
+        if not ok:
+            self._show_transient_message(
+                "Comando ignorato: set_point non ancora noto per questo termostato.", my_token
+            )
+            raise HomeAssistantError("Comando ignorato: set_point non ancora noto per questo termostato.")
+        await asyncio.sleep(2)
+        if my_token == self._attempt_token:
+            self._pending_display = None
+            self.async_write_ha_state()
+
+    def _show_transient_message(self, message: str, token: int) -> None:
+        """Mostra `message` nel campo per 2 secondi, poi torna al profilo originale (a meno che
+        nel frattempo non sia partito un nuovo tentativo, riconosciuto tramite `token`)."""
+        self._pending_display = message
+        self.async_write_ha_state()
+
+        async def _revert():
+            await asyncio.sleep(2)
+            if token == self._attempt_token:
+                self._pending_display = None
+                self.async_write_ha_state()
+
+        if self.hass:
+            self.hass.async_create_task(_revert())
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, entity_id: str = None):
+        if entity_id is None or entity_id == self._thermostat.unique_id:
+            current_state = self.hass.states.get(self.entity_id) if self.hass else None
+            if current_state is not None and current_state.state == self.native_value:
+                return
+            self.async_write_ha_state()
+
+# ============================================================
+# ===== SETUP =====
+# ============================================================
+
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Setup piattaforma text per gli slot orari dei temporizzatori (SCHEDULER)."""
+    """Setup piattaforma text: slot orari temporizzatori (SCHEDULER) + profilo termico termostati."""
+
+    # --- Scheduler (timer) ---
     _LOGGER.debug("Setup piattaforma text (SCHEDULER)")
 
     added_ids: set[int] = set()
@@ -181,3 +284,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
     entry.async_on_unload(
         async_dispatcher_connect(hass, SIGNAL_DISCOVERY_NEW.format("text"), _async_new_timer)
     )
+
+    # --- Termostati (profilo termico settimanale) ---
+    thermostats = get_all_thermostats_thermo()
+    if thermostats:
+        profile_entities = [DomoThermostatProfileText(t, entry.entry_id) for t in thermostats]
+        async_add_entities(profile_entities)
+        _LOGGER.info("Added %d thermal profile text entities", len(profile_entities))

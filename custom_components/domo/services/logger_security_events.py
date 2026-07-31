@@ -23,7 +23,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from ..const import DOMAIN, SIGNAL_UPDATE_ENTITY
 from ..platforms.sicu import get_security_device
 
-from ..alarm_control_panel import AREA_STATUS_MAP, INPUT_STATUS_MAP, CENTRAL_STATUS_MAP
+from ..platforms.sicu import AREA_STATUS_MAP, INPUT_STATUS_MAP, CENTRAL_STATUS_MAP
 
 
 _LOGGER = logging.getLogger(__name__)

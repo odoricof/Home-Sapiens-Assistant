@@ -1,6 +1,9 @@
 """
 domo/climate.py
 
+Entities fed by:
+- platforms/thermoregulation.py
+
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
 License: MIT
@@ -29,7 +32,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.core import callback
 
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
-from .platforms.thermoregulation import DomoThermostat
+from .platforms.thermoregulation import DomoThermostat, get_all_thermostats
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,7 +45,6 @@ FAN_MODES = ["auto", "low", "medium", "high"]
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Setup climate platform."""
-    from .platforms.thermoregulation import get_all_thermostats
     
     thermostats = get_all_thermostats()
     
@@ -92,14 +94,12 @@ class DomoClimateEntity(ClimateEntity):
         
         # Device info
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry_id}_climate")},
-            name="Climate",
+            identifiers={(DOMAIN, f"{entry_id}_climate_{thermostat.unique_id}")},
+            name=thermostat.name,
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
-            
+            via_device=(DOMAIN, f"{entry_id}_climate"),
         )
-        #suggested_area=thermostat.room
-        self._attr_suggested_area = thermostat.room
         
         _LOGGER.debug("Created climate entity: %s in room %s", 
                      self._attr_name, thermostat.room)
@@ -194,13 +194,7 @@ class DomoClimateEntity(ClimateEntity):
             "occupied": self._thermostat.is_occupied,
             "mode": self._thermostat.hvac_mode,
             "status": self._thermostat.status,
-            "season": self._thermostat._season,
-            #"profile_data": self._thermostat.profile_data,
             "thermal_profile_schedule": self._thermostat.thermal_profile_schedule,
-            "t1": self._thermostat.t1,
-            "t2": self._thermostat.t2,
-            "t3": self._thermostat.t3,
-            "antifreeze": self._thermostat.antifreeze,
             "scheduled_setpoint": self._thermostat.scheduled_setpoint,
         }
 

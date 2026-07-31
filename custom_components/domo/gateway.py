@@ -332,7 +332,7 @@ class DomoGateway:
             "sl_client_id": self._client_id,
             "sl_appl_msg": payload,
         }
-
+        _LOGGER.debug("DOMO TX payload: %r", request_payload)
         # Retry on error
         for attempt in range(2):
             try:

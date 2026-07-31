@@ -28,65 +28,13 @@ from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
-CENTRAL_STATUS_MAP = {
-    0: "disinserita",
-    256: "transizione",
-    1024: "ingressi_non_armati_aperti",
-    1280: "inserita_con_ingressi_esclusi_aperti",
-    2048: "sconosciuto",
-    2304: "violazione",
-    3328: "allarme_intrusione",
-    4096: "tempo_uscita_con_ingressi_aperti",
-    4352: "tempo_uscita_con_aree_aperte",
-    8192: "pronta",
-    9216: "inserita",
-    10240: "allarme_memorizzato",
-    10496: "violazione",
-    11264: "allarme_silenziato",
-    11520: "allarme_innescato",
-    12288: "inserimento_in_corso",
-    14336: "tempo_uscita_con_eventi_memorizzati",    
-}
-
-AREA_STATUS_MAP = {
-    #proxinet
-    32: "non_pronta_con_ingressi_aperti",
-    33: "inserimento_con_ingressi_aperti",
-    34: "apertura_ingresso_in_attesa_disarmo",
-    36: "intrusione_rilevata_e_ingressi_aperti",
-    40: "pronta_con_ingressi_chiusi",
-    41: "inserimento_in_corso",
-    42: "inserita",
-    38: "allarme_intrusione_in_corso",
-    46: "intrusione_rilevata",
-    44: "memoria_allarme",
-    96: "ingressi_aperti_e_ingressi_esclusi",
-    104: "pronta_con_ingressi_esclusi",
-    
-    #pxc
-    48: "non_pronta_con_ingressi_aperti",
-    56: "pronta_con_ingressi_chiusi",
-    58: "inserita",
-    60: "memoria_allarme",
-    182: "allarme_intrusione_in_corso",
-    190: "sconosciuto",
-
-}
-
-INPUT_STATUS_MAP = {
-    1: "chiuso",
-    5: "escluso",
-    9: "memoria_allarme",
-    16: "sconosciuto",
-    17: "aperto",
-    25: "allarme",
-    65: "batteria_scarica",
-}
+# Le mappe di decodifica dei codici di stato grezzi della centrale (centrale,
+# aree, ingressi) e la soglia di "area non pronta" vivono in platforms/sicu.py
+# (SecurityCentral.decode_*_status / scenario_ready), che è il punto giusto
+# per la conoscenza del protocollo. Qui usiamo solo il risultato già decodificato.
 
 SECURITY_DOMAIN = "alarm_control_panel"
 PENDING_ARM_DELAY = 30
-AREA_NOT_READY_STATUS = {32, 33, 48, 96}
-SCENARIO_INDEX = {"away": 0, "night": 1, "home": 2}
 STATE_LABELS = {
     AlarmControlPanelState.ARMED_AWAY: "ATTIVO FUORI CASA",
     AlarmControlPanelState.ARMED_NIGHT: "ATTIVO NOTTE",
@@ -154,11 +102,19 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
     @property
     def supported_features(self) -> int:
         """Return the list of supported features."""
-        return (
-            AlarmControlPanelEntityFeature.ARM_HOME
-            | AlarmControlPanelEntityFeature.ARM_AWAY
-            | AlarmControlPanelEntityFeature.ARM_NIGHT
-        )
+        scenarios = getattr(self._device, "_scenarios", {})
+        scenario_by_arm = getattr(self._device, "_scenario_by_arm", {})
+        features = AlarmControlPanelEntityFeature.ARM_AWAY  # "esco di casa" sempre presente
+
+        if scenarios.get(scenario_by_arm.get("armed_night"), {}).get("areas"):
+            features |= AlarmControlPanelEntityFeature.ARM_NIGHT
+
+        if scenarios.get(scenario_by_arm.get("armed_home"), {}).get("areas"):
+            features |= AlarmControlPanelEntityFeature.ARM_HOME
+
+        if scenarios.get(scenario_by_arm.get("armed_custom_bypass"), {}).get("areas"):
+            features |= AlarmControlPanelEntityFeature.ARM_CUSTOM_BYPASS
+        return features
 
     # --------------------------------------------------
     # CODICE
@@ -238,22 +194,28 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
 
         # 4. matching esatto con scenari (solo se distinguibili)      
         scenarios = getattr(device, "_scenarios", {})
+        scenario_by_arm = getattr(device, "_scenario_by_arm", {})
         scenario_areas = {
-            i: frozenset(scenarios.get(i, {}).get("areas", [])) for i in (0, 1, 2)
+            role: frozenset(scenarios.get(sid, {}).get("areas", []))
+            for role, sid in scenario_by_arm.items()
         }
         scenarios_are_unique = len(set(scenario_areas.values())) == len(scenario_areas)
-        
+
         if scenarios_are_unique:
-            if armed_now == scenario_areas[0]:
+            if "armed_away" in scenario_areas and armed_now == scenario_areas["armed_away"]:
                 self._last_armed_state = AlarmControlPanelState.ARMED_AWAY
                 return self._last_armed_state
 
-            if armed_now == scenario_areas[1]:
+            if "armed_night" in scenario_areas and armed_now == scenario_areas["armed_night"]:
                 self._last_armed_state = AlarmControlPanelState.ARMED_NIGHT
                 return self._last_armed_state
 
-            if armed_now == scenario_areas[2]:
+            if "armed_home" in scenario_areas and armed_now == scenario_areas["armed_home"]:
                 self._last_armed_state = AlarmControlPanelState.ARMED_HOME
+                return self._last_armed_state
+
+            if "armed_custom_bypass" in scenario_areas and armed_now == scenario_areas["armed_custom_bypass"]:
+                self._last_armed_state = AlarmControlPanelState.ARMED_CUSTOM_BYPASS
                 return self._last_armed_state
 
         # 5. Fallback matching
@@ -331,7 +293,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
                 
             # Se c'è un inserimento in attesa, verifica se le aree sono diventate pronte
             if self._pending_arm is not None:
-                ready, _ = self._scenario_areas_ready(self._pending_arm["scenario_index"])
+                ready, _ = self._device.scenario_ready(self._pending_arm["arm_key"])
                 if ready:
                     self._pending_arm["ready_event"].set()                
 
@@ -365,45 +327,29 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
 
     async def async_alarm_arm_home(self, code: str | None = None) -> None:
         """Send arm home command."""
-        await self._async_handle_arm_request(SCENARIO_INDEX["home"], "home", code)
+        await self._async_handle_arm_request("armed_home", "home", code)
 
     async def async_alarm_arm_night(self, code: str | None = None) -> None:
         """Send arm night command."""
-        await self._async_handle_arm_request(SCENARIO_INDEX["night"], "night", code)
+        await self._async_handle_arm_request("armed_night", "night", code)
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         """Send arm away command."""
-        await self._async_handle_arm_request(SCENARIO_INDEX["away"], "away", code)
+        await self._async_handle_arm_request("armed_away", "away", code)
+
+    async def async_alarm_arm_custom_bypass(self, code: str | None = None) -> None:
+        """Send arm custom bypass command."""
+        await self._async_handle_arm_request("armed_custom_bypass", "custom_bypass", code)
 
     # --------------------------------------------------
     # GESTIONE INSERIMENTO CON AREE NON PRONTE
     # --------------------------------------------------
-    def _scenario_areas_ready(self, scenario_index: int) -> tuple[bool, list[str]]:
-        """Verifica se tutte le aree coinvolte in uno scenario sono pronte.
-
-        Ritorna (pronto, nomi_aree_non_pronte).
-        """
-        device = self._device
-        data = getattr(device, "_last_snapshot", None)
-        scenarios = getattr(device, "_scenarios", {})
-        target_area_ids = set(scenarios.get(scenario_index, {}).get("areas", []))
-
-        if not data or not target_area_ids:
-            return True, []
-
-        not_ready = []
-        for area in data.get("areas", []):
-            if area.get("area_id") in target_area_ids and area.get("status") in AREA_NOT_READY_STATUS:
-                not_ready.append(area.get("name", f"area_{area.get('area_id')}"))
-
-        return (len(not_ready) == 0), not_ready
-
-    async def _async_handle_arm_request(self, scenario_index: int, mode: str, code: str | None) -> None:
+    async def _async_handle_arm_request(self, arm_key: str, mode: str, code: str | None) -> None:
         """Gestisce una richiesta di inserimento, con attesa se ci sono aree non pronte."""
         # Una nuova richiesta di inserimento annulla un'eventuale attesa precedente
         await self._async_cancel_pending_arm()
 
-        ready, not_ready_areas = self._scenario_areas_ready(scenario_index)
+        ready, not_ready_areas = self._device.scenario_ready(arm_key)
 
         if ready:
             await self._async_send_arm_command(mode, code)
@@ -417,7 +363,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         self._pending_arm = {
             "mode": mode,
             "code": code,
-            "scenario_index": scenario_index,
+            "arm_key": arm_key,
             "ready_event": asyncio.Event(),
         }
         self.async_write_ha_state()
@@ -425,10 +371,10 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         await self._send_pending_arm_notification(not_ready_areas)
 
         self._pending_arm["task"] = self.hass.async_create_task(
-            self._pending_arm_watcher(scenario_index, mode, code)
+            self._pending_arm_watcher(arm_key, mode, code)
         )
 
-    async def _pending_arm_watcher(self, scenario_index: int, mode: str, code: str | None) -> None:
+    async def _pending_arm_watcher(self, arm_key: str, mode: str, code: str | None) -> None:
         """Attende che le aree diventino pronte oppure
         che scada PENDING_ARM_DELAY. In entrambi i casi l'inserimento viene eseguito,
         a meno che la richiesta non sia stata annullata da un disarm nel frattempo.
@@ -469,7 +415,9 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         elif mode == "night":
             await self._device.arm_night(code)
         elif mode == "home":
-            await self._device.arm_home(code) 
+            await self._device.arm_home(code)
+        elif mode == "custom_bypass":
+            await self._device.arm_custom_bypass(code)            
              
     # --------------------------------------------------
     # ATTRIBUTI EXTRA
@@ -485,14 +433,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         central = data.get("central", {}) or {}
         central_raw = central.get("status")
 
-        central_status = None
-        if central_raw is not None:
-            central_status = {
-                "raw": central_raw,
-                "state": CENTRAL_STATUS_MAP.get(
-                    central_raw, f"sconosciuto_{central_raw}"
-                ),
-            }
+        central_status = self._device.decode_central_status(central_raw)
 
         # AREE
         areas = data.get("areas", [])
@@ -517,12 +458,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
             if raw_status is None:
                 continue
 
-            areas_status[area_name] = {
-                "raw": raw_status,
-                "state": AREA_STATUS_MAP.get(
-                    raw_status, f"sconosciuto_{raw_status}"
-                ),
-            }
+            areas_status[area_name] = self._device.decode_area_status(raw_status)
 
         # INGRESSI
         inputs = data.get("inputs", [])
@@ -548,10 +484,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
             ]
 
             inputs_status[input_name] = {
-                "raw": raw_status,
-                "state": INPUT_STATUS_MAP.get(
-                    raw_status, f"sconosciuto_{raw_status}"
-                ),
+                **self._device.decode_input_status(raw_status),
                 "areas": input_areas,
             }
             

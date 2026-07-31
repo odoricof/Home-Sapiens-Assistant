@@ -21,6 +21,7 @@ from .gateway import DomoGateway
 from .platforms.activations import discover_activations, handle_activation_status_update
 from .platforms.analogics import discover_analogics, handle_analogic_status_update
 from .platforms.digital_in import discover_digital_ins, handle_digital_in_status_update
+from .platforms.irrigation import discover_irrigation_zones, handle_irrigation_status_update
 from .platforms.sicu import handle_security_status_update, discover_security
 from .platforms.lights import discover_lights, handle_light_status_update 
 from .platforms.thermoregulation import discover_thermostats, handle_thermostat_status_update
@@ -62,6 +63,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     gateway.register_event_callback(handle_opening_status_update)
     gateway.register_event_callback(handle_scenario_status_update)
     gateway.register_event_callback(handle_timer_status_update)
+    gateway.register_event_callback(handle_irrigation_status_update)
     
     await gateway.start()
     await async_register_notification_services(hass, gateway)
@@ -77,6 +79,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await discover_scenarios(gateway)
     await discover_timers(gateway)
     await discover_tvcc_cameras(gateway)
+    await discover_irrigation_zones(gateway)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)    
     
     hass.data[DOMAIN][entry.entry_id] = gateway   

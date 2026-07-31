@@ -30,12 +30,16 @@ SIGNAL_GATEWAY_OFFLINE = "domo_gateway_offline"
 PLATFORMS = [
     "alarm_control_panel",
     "binary_sensor",
+    "button",
     "light",
     "climate",
+    "number",
+    "select",
     "sensor",
     "scene",
     "switch",
     "cover",
     "camera",
     "text",
+    "time",
 ]

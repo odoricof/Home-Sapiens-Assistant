@@ -1,3 +1,6 @@
+### 🌐 Lingua / Language
+- [English](Changelog.md) | [Italiano](Changelog.it.md)
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -18,7 +21,6 @@ All notable changes to this project will be documented in this file.
 - Fan coils
 - Intrusion alarm panel
 - Lights
-- Intrusion alarm panel
 - Scenes
 
 ## [1.1.0] - 2026-04-04
@@ -51,7 +53,9 @@ All notable changes to this project will be documented in this file.
 
 ## [1.4.0] - 2026-07-11
 
-### Automatic Thermal Profile added fature
+### Added
+
+#### Automatic Thermal Profile added fature
 
 - **Thermal profile exposure** for climate entities
 - **Readable profile decoding**: new `thermal_profile_schedule` attribute that condenses the 96 quarter-hour slots into compressed time ranges (e.g. `00:00-09:00: t3 | 30.0°C`), one line per range, ready for quick consultation and automations.
@@ -59,14 +63,14 @@ All notable changes to this project will be documented in this file.
 - **More readable state attributes**: `mode` and `status` now return textual labels instead of raw numeric codes.
 - **Automatic profile refresh on restart**: thermostats already in AUTO mode now actively request the complete thermal profile and expose it immediately.
 
-### Interaction with the Climate Card added feature
+#### Interaction with the Climate Card added feature
 
 - **AUTO mode now displays the scheduled set-point** on the native card (number + slider), instead of only showing the text "Automatic" — consistent with the standard behavior of other Home Assistant climate integrations.
 - **OFF mode (winter only) displays the antifreeze value** (`antifreeze`) on the card, instead of blocking all interaction. In summer it remains "Off" without a slider, since the concept of antifreeze does not apply to cooling.
 - **Assisted interaction**: if the user moves the slider while the thermostat is in AUTO or OFF mode (OFF only in winter), the thermostat automatically switches to **manual** mode and immediately applies the requested temperature, with a single call to the gateway (mode + set_point in a single command).
 - New `antifreeze` (°C) attribute exposed on the entity.
 
-### Minor Fix 
+### Fixed 
 
 - **Merge pull request #4 from brokkolo/patch-1**: Fix false 0°C history dips: climate entities defaulted temp_dec/set_point to 0/200 instead of None
 
@@ -91,13 +95,89 @@ When the user requests arming (arm_home / arm_night / arm_away) and one or more 
 
 1. Added push notification system that informs the user of every state change of the control panel.
 
-### New Features
+### Added
 
-1. Timer management (Scheduler platform)
+#### Timer management (Scheduler platform)
+
+![Scheduler](images/scheduler.png)
+
 - [Feature] expose CAME activation (relay) timers/schedules as entity attributes
  #2
 
-### Minor Fix 
+### Fixed 
 
 - [Bug] alarm_control_panel state stuck at "unknown" after restart — central status never queried during discovery
  #3
+## [1.6.0] - 2026-07-26
+
+### Added
+
+#### Irrigation Platform
+
+![Irrigation](images/irrigation.png)
+
+Full irrigation platform support, exposing all native irrigation management features as Home Assistant entities.
+
+##### Irrigation Sectors
+
+- Enable/disable irrigation sector
+- Irrigation duration percentage relative to the programmed nominal duration
+- Weekly schedule configuration with individual enable/disable for each day
+- Configurable irrigation start time
+- Irrigation status indicating whether the current irrigation cycle was started manually or automatically by schedule
+- Manual start/stop of irrigation
+
+##### Sprinklers
+
+- Enable/disable individual sprinkler
+- Configurable maximum irrigation time
+- Configurable duty cycle percentage
+- Real-time operating status shown directly on the switch entity through a dynamic icon
+
+#### Climate Platform
+
+##### Weekly Thermal Schedule
+
+![Thermal Schedule](images/thermal_scheduler.png)
+
+Added complete weekly thermal schedule management directly from Home Assistant, matching the functionality available in the native interface.
+
+- Day selector entity automatically synchronized with the active thermal profile
+- Editable daily profile using a human-readable time-range format
+- Direct upload of modified schedules to the thermostat
+
+The following parameters are now exposed for both reading and writing:
+
+- Antifreeze
+- Thermal differential
+- Thermal profile day
+- Algorithm mode
+- Daily thermal profile
+- T1 / T2 / T3
+
+#### Thermal Profile Backup & Restore
+
+![Thermo bk](images/thermo_bk.png)
+
+##### Backup
+
+- New **Backup Thermal Profiles** button
+- Saves T1/T2/T3 set-points and weekly schedules for every thermostat
+- Backup files stored in `config/thermo_profile_bk/`
+- Automatic seasonal filename generation (winter/summer)
+
+##### Restore
+
+- Automatic backup file selector
+- Seasonal filtering prevents restoring incompatible profiles
+- New **Restore Thermal Profiles** button
+- Automatic verification of every restored thermostat
+- Temporary progress/completion status shown directly by the selector
+- Thermostats missing from the installation are skipped with a warning without interrupting the restore process
+
+### Minor Fix
+
+- Added anti-glitch filtering during ETI/DOMO bus programming to discard invalid `temp_dec` values (outside 3–35°C) and `hygro` values (outside 0–100%), preventing invalid temperature and humidity readings from propagating to Climate entities.
+- Alarm panel now exposes only the scenarios actually configured in the installation. **Away** is always available, while **Night** and **Home** are created only when the corresponding scenarios exist and contain configured areas.
+- Fixed an issue where, on some systems, the app could display the wrong button instead of "Stay at Home" (e.g. "Night"). The system now recognizes each scenario by its actual name configured in the control panel, rather than by assuming a fixed order.
+- Added automatic detection of any custom scenario configured in the control panel, which was previously not handled.

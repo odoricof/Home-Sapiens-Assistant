@@ -18,8 +18,83 @@ from typing import Dict, Any, Optional
 
 _LOGGER = logging.getLogger(__name__)
 
-TYPE_SECURITY_CENTRAL = -10
+_SCENARIO_ROLE_KEYWORDS: dict[str, list[str]] = {
+    "armed_away": ["esco", "fuori casa"],
+    "armed_night": ["notte", "letto"],
+    "armed_home": ["resto", "in casa"],
+}
 
+def _match_scenario_role(name: str | None) -> str | None:
+    """Deduce il ruolo (armed_away/night/home) dal nome scenario della centrale."""
+    upper = (name or "").upper()
+    for role, keywords in _SCENARIO_ROLE_KEYWORDS.items():
+        if any(kw.upper() in upper for kw in keywords):
+            return role
+    return None
+
+
+# ============================================================
+# DECODIFICA CODICI DI STATO PROTOCOLLO (centrale / aree / ingressi)
+# ============================================================
+
+CENTRAL_STATUS_MAP = {
+    0: "disinserita",
+    256: "transizione",
+    1024: "ingressi_non_armati_aperti",
+    1280: "inserita_con_ingressi_esclusi_aperti",
+    2048: "sconosciuto",
+    2304: "violazione",
+    3328: "allarme_intrusione",
+    4096: "tempo_uscita_con_ingressi_aperti",
+    4352: "tempo_uscita_con_aree_aperte",
+    8192: "pronta",
+    9216: "inserita",
+    10240: "allarme_memorizzato",
+    10496: "violazione",
+    11264: "allarme_silenziato",
+    11520: "allarme_innescato",
+    12288: "inserimento_in_corso",
+    14336: "tempo_uscita_con_eventi_memorizzati",
+}
+
+AREA_STATUS_MAP = {
+    # proxinet
+    32: "non_pronta_con_ingressi_aperti",
+    33: "inserimento_con_ingressi_aperti",
+    34: "apertura_ingresso_in_attesa_disarmo",
+    36: "intrusione_rilevata_e_ingressi_aperti",
+    40: "pronta_con_ingressi_chiusi",
+    41: "inserimento_in_corso",
+    42: "inserita",
+    38: "allarme_intrusione_in_corso",
+    46: "intrusione_rilevata",
+    44: "memoria_allarme",
+    96: "ingressi_aperti_e_ingressi_esclusi",
+    104: "pronta_con_ingressi_esclusi",
+
+    # pxc
+    48: "non_pronta_con_ingressi_aperti",
+    56: "pronta_con_ingressi_chiusi",
+    58: "inserita",
+    60: "memoria_allarme",
+    182: "allarme_intrusione_in_corso",
+    190: "sconosciuto",
+}
+
+INPUT_STATUS_MAP = {
+    1: "chiuso",
+    5: "escluso",
+    9: "memoria_allarme",
+    16: "sconosciuto",
+    17: "aperto",
+    25: "allarme",
+    65: "batteria_scarica",
+}
+
+AREA_NOT_READY_STATUS = {32, 33, 48, 96}
+
+
+TYPE_SECURITY_CENTRAL = -10
 _SECURITY_DEVICE: Optional["SecurityCentral"] = None
 
 # ============================================================
@@ -193,11 +268,8 @@ class SecurityCentral:
         self._scenarios: dict[int, dict] = {}
         
         # MAPPING DEGLI SCENARI
-        self._scenario_by_arm: dict[str, int] = {
-            "armed_away": 0,   # ESCO DI CASA
-            "armed_night": 1,  # VADO A LETTO
-            "armed_home": 2,   # RESTO IN CASA
-        }
+        self._scenario_by_arm: dict[str, int] = {}
+        
         self.available = False
         self.update_pending = False
         
@@ -317,13 +389,6 @@ class SecurityCentral:
         # --------------------------------------------------
         if cmd == "sicu_scenarios_list_resp":
             self._scenarios.clear()
-            
-            # Mapping fisso basato su ID
-            self._scenario_by_arm = {
-                "armed_away": 0,    # ESCO DI CASA
-                "armed_night": 1,   # VADO A LETTO
-                "armed_home": 2,    # RESTO IN CASA
-            }
 
             for item in data.get("array", []) or []:
                 scenario_id = item.get("scenario_id")
@@ -331,17 +396,29 @@ class SecurityCentral:
                     continue
                 self._scenarios[int(scenario_id)] = item
 
+            self._scenario_by_arm = {}
+            for sid, scenario in self._scenarios.items():
+                role = _match_scenario_role(scenario.get("name"))
+                if role and role not in self._scenario_by_arm:
+                    self._scenario_by_arm[role] = sid
+
+            for sid in self._scenarios:
+                if sid not in self._scenario_by_arm.values():
+                    self._scenario_by_arm["armed_custom_bypass"] = sid
+                    break
+
             _LOGGER.info(
                 "SECURITY scenarios loaded | count=%s",
                 len(self._scenarios),
             )
 
             for sid, scenario in self._scenarios.items():
+                role = next((r for r, i in self._scenario_by_arm.items() if i == sid), "unknown")
                 _LOGGER.debug("SECURITY scenario %d: %s (areas: %s) -> %s", 
                              sid,
                              scenario.get("name"),
                              scenario.get("areas"),
-                             {0: "armed_away", 1: "armed_night", 2: "armed_home"}.get(sid, "unknown"))            
+                             role)
             return True
             
         # --------------------------------------------------
@@ -483,30 +560,50 @@ class SecurityCentral:
         )
         return True
 
-    @property
-    def alarm_state(self):
-        """Determina lo stato dell'allarme basato sulle aree armate."""
-        status = self.state.get("status", 0)
+    # --------------------------------------------------
+    # DECODIFICA STATO (usata da alarm_control_panel.py per extra_state_attributes)
+    # --------------------------------------------------
 
-        if status == 0:
-            return "disarmed"
+    @staticmethod
+    def decode_central_status(raw):
+        if raw is None:
+            return None
+        return {"raw": raw, "state": CENTRAL_STATUS_MAP.get(raw, f"sconosciuto_{raw}")}
 
-        # Verifica quali aree sono armate
-        armed_areas = self.get_current_armed_areas()
-        
-        if not armed_areas:
-            return "disarmed"
-        
-        # Confronta con le aree di ogni scenario
-        if armed_areas == set(self._scenarios.get(0, {}).get("areas", [])):  # ESCO DI CASA
-            return "armed_away"
-        elif armed_areas == set(self._scenarios.get(1, {}).get("areas", [])):  # VADO A LETTO
-            return "armed_night"
-        elif armed_areas == set(self._scenarios.get(2, {}).get("areas", [])):  # RESTO IN CASA
-            return "armed_home"
-        
-        # Fallback
-        return "armed_away"
+    @staticmethod
+    def decode_area_status(raw):
+        if raw is None:
+            return None
+        return {"raw": raw, "state": AREA_STATUS_MAP.get(raw, f"sconosciuto_{raw}")}
+
+    @staticmethod
+    def decode_input_status(raw):
+        if raw is None:
+            return None
+        return {"raw": raw, "state": INPUT_STATUS_MAP.get(raw, f"sconosciuto_{raw}")}
+
+    # --------------------------------------------------
+    # READINESS SCENARIO (usata da alarm_control_panel.py per l'attesa area non pronta)
+    # --------------------------------------------------
+
+    def scenario_ready(self, arm_key: str) -> tuple[bool, list[str]]:
+        """Verifica se tutte le aree coinvolte nello scenario di un ruolo sono pronte.
+
+        Ritorna (pronto, nomi_aree_non_pronte).
+        """
+        scenario_id = self._scenario_by_arm.get(arm_key)
+        target_area_ids = set(self._scenarios.get(scenario_id, {}).get("areas", []))
+
+        data = self._last_snapshot
+        if not data or not target_area_ids:
+            return True, []
+
+        not_ready = []
+        for area in data.get("areas", []):
+            if area.get("area_id") in target_area_ids and area.get("status") in AREA_NOT_READY_STATUS:
+                not_ready.append(area.get("name", f"area_{area.get('area_id')}"))
+
+        return (len(not_ready) == 0), not_ready
 
     async def arm(self, arm_type: str, code: str | None = None):
         scenario_id = self._scenario_by_arm.get(arm_type)
@@ -542,6 +639,9 @@ class SecurityCentral:
 
     async def arm_night(self, code: str | None = None):
         await self.arm("armed_night", code)
+        
+    async def arm_custom_bypass(self, code: str | None = None):
+        await self.arm("armed_custom_bypass", code)        
 
     async def disarm(self, code: str | None = None):
         if not self._gateway:
@@ -589,20 +689,6 @@ class SecurityCentral:
         }
 
         await self._gateway.tx_command(payload, resp_command=None)
-
-    def get_current_armed_areas(self) -> set[int]:
-        data = self._last_snapshot or {}
-        areas = data.get("areas", [])
-        return {
-            a["area_id"]
-            for a in areas
-            if a.get("status") == 42
-        }
-
-    def has_pending_areas(self) -> bool:
-        data = self._last_snapshot or {}
-        areas = data.get("areas", [])
-        return any(a.get("status") == 41 for a in areas)
 
     # --------------------------------------------------
     # SNAPSHOT
