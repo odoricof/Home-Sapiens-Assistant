@@ -146,7 +146,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         central_status = central.get("status")
 
         # 0. TRIGGERED
-        if central_status in (3328, 11520, 11264, 2304, 10496):
+        if central_status in (3072, 3328, 11520, 11264, 2304, 10496):
             # Raccogli i sensori violati
             violated_inputs = []
             for inp in data.get("inputs", []):

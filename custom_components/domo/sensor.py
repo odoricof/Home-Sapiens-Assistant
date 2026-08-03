@@ -25,61 +25,36 @@ from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
 from .platforms.analogics import DomoAnalogIn, get_all_analogics
 from .platforms.meters import DomoMeter
 from .platforms.meters import get_all_meters
-from .platforms.sicu import get_security_device
+from .platforms.sicu import (
+    get_security_device,
+    AREA_STATUS_MAP,
+    INPUT_STATUS_MAP,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-# Mappa stati ingressi sicurezza
-INPUT_STATUS_MAP = {
-    1: "Chiuso",
-    5: "Escluso",
-    9: "Memoria allarme",
-    16: "Sconosciuto",
-    17: "Aperto",
-    25: "Allarme",
-    65: "Batteria scarica",
-}
-
-# Mappa stati aree sicurezza
-AREA_STATUS_MAP = {
-    #proxinet:
-    32: "Non pronta",
-    33: "Inserimento con ingressi aperti",
-    34: "Apertura ingresso in attesa disarmo",
-    36: "Intrusione rilevata e ingressi aperti",
-    40: "Pronta",
-    41: "Inserimento in corso",
-    42: "Inserita",
-    38: "Allarme intrusione in corso",
-    46: "Intrusione rilevata",
-    44: "Memoria allarme",
-    96: "Ingressi aperti e ingressi esclusi",
-    104: "Pronta con ingressi esclusi",
-    #pxc:
-    48: "Non pronta",
-    56: "Pronta (ingressi chiusi)",
-    58: "Inserita",
-    60: "Memoria allarme",
-    182: "Allarme intrusione in corso",
-    190: "Sconosciuto",
-}
-
+# ============================================================================
+# SETUP PLATFORM
+# ============================================================================
 async def async_setup_entry(hass, entry, async_add_entities):
     """Setup sensor platform"""
-    
+
     meters = get_all_meters()
     analogics = get_all_analogics()
     security = get_security_device()
-    
+
     entities = []
-    
-    # Sensori per i misuratori di energia
+
+    # ------------------------------------------------------------------
+    # Sensori: misuratori di energia (potenza istantanea + energia incrementale)
+    # ------------------------------------------------------------------
     for meter in meters:
-        # Crea due entità per ogni meter: potenza istantanea e energia incrementale
         entities.append(DomoPowerSensor(meter, entry.entry_id))
         entities.append(DomoEnergySensor(meter, entry.entry_id))
-    
-    # Sensori per gli ingressi analogici
+
+    # ------------------------------------------------------------------
+    # Sensori: ingressi analogici
+    # ------------------------------------------------------------------
     if analogics:
         analog_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry.entry_id}_analogics")},
@@ -87,18 +62,22 @@ async def async_setup_entry(hass, entry, async_add_entities):
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
-        
+
         for analog_in in analogics:
             entities.append(DomoAnalogSensor(analog_in, analog_device_info, entry.entry_id))
         _LOGGER.debug("Added %d analog sensor entities", len(analogics))
-    
-    # Sensori per gli ingressi della sicurezza
+
+    # ------------------------------------------------------------------
+    # Sensori: allarme - ingressi sicurezza
+    # (raggruppati sotto il device "Alarm" creato dall'alarm panel)
+    # ------------------------------------------------------------------
     if security and hasattr(security, "_inputs") and security._inputs:
         security_inputs_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_security_inputs")},
+            identifiers={(DOMAIN, "burlgar_alarm_inputs")},
             name="Security Inputs",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
+            via_device=(DOMAIN, "burlgar_alarm"),
         )
         
         for inp in security._inputs:
@@ -107,27 +86,35 @@ async def async_setup_entry(hass, entry, async_add_entities):
             entities.append(SecurityInputSensor(security, input_id, input_name, security_inputs_device_info))
             _LOGGER.info("Added sensor for security input: %s (ID: %s)", input_name, input_id)
 
-    # 4. Sensori per le aree della sicurezza
+    # ------------------------------------------------------------------
+    # Sensori: allarme - aree sicurezza
+    # (raggruppati sotto il device "Alarm" creato dall'alarm panel)
+    # ------------------------------------------------------------------
     if security and hasattr(security, "_areas") and security._areas:
         security_areas_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_security_areas")},
+            identifiers={(DOMAIN, "burlgar_alarm_areas")},
             name="Security Areas",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
+            via_device=(DOMAIN, "burlgar_alarm"),
         )
-        
+
         for area in security._areas:
             area_id = area.get("area_id")
             area_name = area.get("name", f"Area {area_id}")
             entities.append(SecurityAreaSensor(security, area_id, area_name, security_areas_device_info))
-            _LOGGER.info("Added sensor for security area: %s (ID: %s)", area_name, area_id)        
-        
+            _LOGGER.info("Added sensor for security area: %s (ID: %s)", area_name, area_id)
+
     if entities:
         async_add_entities(entities)
         _LOGGER.debug("Added %d total sensor entities (meters + analogics + security inputs + security areas)", len(entities))
     else:
         _LOGGER.debug("No sensors found to setup")
 
+
+# ============================================================================
+# SEZIONE: SENSORI ENERGIA (misuratori)
+# ============================================================================
 class DomoPowerSensor(SensorEntity):
     """Sensore di potenza istantanea."""
 
@@ -261,6 +248,9 @@ class DomoEnergySensor(SensorEntity):
             self.async_write_ha_state()
 
 
+# ============================================================================
+# SEZIONE: SENSORI ANALOGICI
+# ============================================================================
 class DomoAnalogSensor(SensorEntity):
     """Sensore per ingressi analogici ETI Domo."""
 
@@ -374,6 +364,9 @@ class DomoAnalogSensor(SensorEntity):
             self.async_write_ha_state()
 
 
+# ============================================================================
+# SEZIONE: SENSORI ALLARME - INGRESSI SICUREZZA
+# ============================================================================
 class SecurityInputSensor(SensorEntity):
     def __init__(self, security, input_id: int, name: str, device_info: DeviceInfo, sensor_type: int = None):
         self._security = security
@@ -451,7 +444,11 @@ class SecurityInputSensor(SensorEntity):
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, handle_update)
         )
-        
+
+
+# ============================================================================
+# SEZIONE: SENSORI ALLARME - AREE SICUREZZA
+# ============================================================================
 class SecurityAreaSensor(SensorEntity):
     """Sensor entity per le aree della centrale sicurezza."""
     
@@ -486,7 +483,7 @@ class SecurityAreaSensor(SensorEntity):
             return "mdi:alarm-light"
         if self._state == "Memoria allarme":
             return "mdi:bell-alert"
-        if self._state == "Pronta":
+        if self._state == "Pronta con ingressi chiusi":
             return "mdi:shield-lock"
         if "Non pronta" in self._state:
             return "mdi:shield-lock-open"
@@ -524,4 +521,4 @@ class SecurityAreaSensor(SensorEntity):
         
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, handle_update)
-        )        
+        )

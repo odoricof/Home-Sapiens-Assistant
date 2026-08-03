@@ -27,8 +27,11 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, entry, async_add_entities):
     """Setup binary sensor platform."""
     entities = []
-    
-    # 1. INGRESSI DIGITALI
+
+    # ------------------------------------------------------------------
+    # Binary sensor: ingressi digitali
+    # (raggruppati sotto il device "Digital Inputs")
+    # ------------------------------------------------------------------
     digital_ins = get_all_digital_ins()
     if digital_ins:
         digital_inputs_device_info = DeviceInfo(
@@ -37,21 +40,26 @@ async def async_setup_entry(hass, entry, async_add_entities):
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
-        
-        entities.extend([DomoBinarySensor(digital_in, digital_inputs_device_info) 
+
+        entities.extend([DomoBinarySensor(digital_in, digital_inputs_device_info)
                         for digital_in in digital_ins])
         _LOGGER.info("Added %d binary sensors for digital inputs", len(digital_ins))
-    
-    # 2. USCITE SICUREZZA
+
+    # ------------------------------------------------------------------
+    # Binary sensor: allarme - uscite sicurezza
+    # (raggruppati sotto il subdevice "Security Outputs", figlio del
+    # device "Alarm" creato dall'alarm panel)
+    # ------------------------------------------------------------------
     security = get_security_device()
     if security and hasattr(security, "_outputs") and security._outputs:
         security_outputs_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_security_outputs")},
+            identifiers={(DOMAIN, "burlgar_alarm_outputs")},
             name="Security Outputs",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
+            via_device=(DOMAIN, "burlgar_alarm"),
         )
-        
+
         for output in security._outputs:
             output_id = output.get("output_id")
             output_name = output.get("name", f"Uscita {output_id}")
@@ -59,7 +67,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
             _LOGGER.info("Added binary sensor for security output: %s (ID: %s)", output_name, output_id)
     else:
         _LOGGER.debug("No security outputs available yet")
-    
+
     if entities:
         async_add_entities(entities)
         _LOGGER.info("Added total %d binary sensor entities", len(entities))
@@ -67,6 +75,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         _LOGGER.debug("No binary sensor entities to add")
 
 
+# ==========================================================================
+# Classi entità: ingressi digitali
+# ==========================================================================
 class DomoBinarySensor(BinarySensorEntity):
     """Binary sensor entity for digital inputs."""
 
@@ -96,9 +107,12 @@ class DomoBinarySensor(BinarySensorEntity):
             self.async_write_ha_state()
 
 
+# ==========================================================================
+# Classi entità: allarme - uscite sicurezza
+# ==========================================================================
 class SecurityOutputBinarySensor(BinarySensorEntity):
     """Binary sensor entity per le uscite della centrale sicurezza."""
-    
+
     def __init__(self, security, output_id: int, name: str, device_info: DeviceInfo):
         self._security = security
         self._output_id = output_id
@@ -110,18 +124,18 @@ class SecurityOutputBinarySensor(BinarySensorEntity):
         for out in security._outputs:
             if out.get("output_id") == output_id:
                 self._state = out.get("status", 0) == 1
-                break        
-        
+                break
+
     @property
     def icon(self) -> str:
         """Icona per le uscite di sicurezza."""
         return "mdi:toggle-switch" if self._state else "mdi:toggle-switch-off"
-        
+
     @property
     def device_class(self) -> str | None:
         """Device class per il sensore binario."""
         return None
-        
+
     @property
     def is_on(self) -> bool:
         """Return true if output is active."""
@@ -143,7 +157,7 @@ class SecurityOutputBinarySensor(BinarySensorEntity):
                             self._state = new_state
                             self.async_write_ha_state()
                         break
-        
+
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, handle_update)
         )

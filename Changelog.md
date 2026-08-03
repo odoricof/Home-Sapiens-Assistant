@@ -108,6 +108,7 @@ When the user requests arming (arm_home / arm_night / arm_away) and one or more 
 
 - [Bug] alarm_control_panel state stuck at "unknown" after restart — central status never queried during discovery
  #3
+ 
 ## [1.6.0] - 2026-07-26
 
 ### Added
@@ -181,3 +182,22 @@ The following parameters are now exposed for both reading and writing:
 - Alarm panel now exposes only the scenarios actually configured in the installation. **Away** is always available, while **Night** and **Home** are created only when the corresponding scenarios exist and contain configured areas.
 - Fixed an issue where, on some systems, the app could display the wrong button instead of "Stay at Home" (e.g. "Night"). The system now recognizes each scenario by its actual name configured in the control panel, rather than by assuming a fixed order.
 - Added automatic detection of any custom scenario configured in the control panel, which was previously not handled.
+
+## [1.7.0] - 2026-08-02
+
+### New distribution
+
+- 🎉 the integration has been added to the official HACS catalog.<br>
+From now on it can be installed with a simple search, without any additional configuration needed.
+
+### Added
+
+![alarm](images/alarm.png)
+
+- Alarm Silencing: New command to silence the alarm siren directly from Home Assistant, by entering your code into a dedicated text entity.
+
+- Alarm vent Memory Reset: New command to clear the alarm event memory recorded by the control panel, directly from Home Assistant, by entering your code into a dedicated text entity.
+
+### Minor Fix
+
+- SecurityEventsLogger now uses a portable log path via hass.config.path() instead of a hardcoded /config path, and file I/O (directory creation, log writes) now runs in an executor to avoid blocking the event loop. 

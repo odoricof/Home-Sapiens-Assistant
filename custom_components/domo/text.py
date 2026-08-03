@@ -4,6 +4,7 @@ domo/text.py
 Entities fed by:
 - platforms/thermoregulation.py
 - platforms/scheduler.py
+- platforms/sicu.py
 
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
@@ -32,6 +33,7 @@ from .platforms.scheduler import (
     get_all_timers,
     async_set_timer_timetable,
 )
+from .platforms.sicu import get_security_device, CENTRAL_STATUS_MAP
 from .platforms.thermoregulation import (
     DomoThermostat,
     get_all_thermostats as get_all_thermostats_thermo,
@@ -197,7 +199,6 @@ class DomoThermostatProfileText(TextEntity):
             return self._pending_display
         return self._thermostat.profile_draft
 
-# DOPO
     async def async_set_value(self, value: str) -> None:
         _LOGGER.debug("T📈EXT %s: async_set_value chiamato con value=%r", self._attr_unique_id, value)
         self._attempt_token += 1
@@ -252,11 +253,156 @@ class DomoThermostatProfileText(TextEntity):
             self.async_write_ha_state()
 
 # ============================================================
+# ===== SICUREZZA (silenzia sirene / reset memoria eventi) =====
+# ============================================================
+
+class DomoSicuActionText(TextEntity):
+    """Text 'write-only': il codice inserito viene inviato subito come comando
+    (silence / reset_event_memory) alla centrale e il campo torna vuoto.
+    Compare come controllo nel device 'Alarm' (stesso device di alarm_control_panel)."""
+
+    _attr_should_poll = False
+    _attr_mode = TextMode.TEXT
+    _attr_native_min = 0
+    _attr_native_max = 23
+    
+    _TARGET_STATUS = {
+        "silence": {3072, 11264},
+        "reset_event_memory": {0, 8192, 9216},
+    }
+
+    _SEND_REQUIRES = {
+        "silence": {3328, 11520},  # allarme_intrusione, allarme_innescato
+    }   
+
+    def __init__(self, entry_id: str, action: str, name: str, icon: str):
+        self._action = action
+        self._attr_unique_id = f"{entry_id}_sicu_{action}_code"
+        self._attr_name = name
+        self._attr_icon = icon
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "burlgar_alarm")},
+            name="Alarm",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
+        )
+        self._pending_display: str | None = None
+        self._attempt_token: int = 0
+
+    @property
+    def native_value(self) -> str:
+        if self._pending_display is not None:
+            return self._pending_display
+        return ""
+
+    async def async_set_value(self, value: str) -> None:
+        code = value.strip()
+        device = get_security_device()
+        if not device:
+            raise HomeAssistantError("Centrale di sicurezza non disponibile")
+
+        self._attempt_token += 1
+        my_token = self._attempt_token
+        
+        initial_status = device.state.get("status")
+
+        required = self._SEND_REQUIRES.get(self._action)
+        if required is not None and initial_status not in required:
+            _LOGGER.debug(
+                "SICU ACTION %s: precondizione non soddisfatta (status=%s), comando non inviato",
+                self._action, initial_status,
+            )
+            self._pending_display = "Nessuna azione eseguita"
+            self.async_write_ha_state()
+            await asyncio.sleep(2)
+            if my_token == self._attempt_token:
+                self._pending_display = None
+                self.async_write_ha_state()
+            return
+
+        try:
+            if self._action == "silence":
+                await device.silence(code)
+            else:
+                await device.reset_event_memory(code)
+        except Exception as err:
+            self._show_transient_message("Errore", my_token)
+            raise HomeAssistantError(f"Errore SICU ACTION {self._action}: {err}") from err
+
+        if initial_status in self._TARGET_STATUS.get(self._action, set()):
+            _LOGGER.info(
+                "SICU ACTION %s: centrale già in quiete (status=%s), nessuna azione necessaria",
+                self._action, initial_status,
+            )
+            self._pending_display = "Nessuna azione eseguita"
+        else:
+            confirmed = await self._wait_for_confirmation(device, initial_status)
+            if confirmed:
+                _LOGGER.info("SICU ACTION %s confermata dalla centrale", self._action)
+                self._pending_display = "eseguito"
+            else:
+                _LOGGER.warning(
+                    "SICU ACTION %s NON confermata entro il timeout (status attuale=%s)",
+                    self._action, device.state.get("status"),
+                )
+                self._pending_display = "Errore"
+        self.async_write_ha_state()
+
+        await asyncio.sleep(2)
+        if my_token == self._attempt_token:
+            self._pending_display = None
+            self.async_write_ha_state()
+            
+    async def _wait_for_confirmation(self, device, initial_status, timeout: float = 2.0) -> bool:
+        """Attende (poll) che lo status della centrale raggiunga uno dei
+        valori attesi per l'azione in corso, entro `timeout` secondi.
+        Richiede una transizione reale rispetto a `initial_status`."""
+        targets = self._TARGET_STATUS.get(self._action, set())
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            status = device.state.get("status")
+            if status in targets and status != initial_status:
+                _LOGGER.debug(
+                    "SICU ACTION %s: status confermato %s (%s)",
+                    self._action, status, CENTRAL_STATUS_MAP.get(status),
+                )
+                return True
+            await asyncio.sleep(0.1)
+        return False
+
+    def _show_transient_message(self, message: str, token: int) -> None:
+        """Mostra `message` nel campo per 2 secondi, poi torna vuoto."""
+        self._pending_display = message
+        self.async_write_ha_state()
+
+        async def _revert():
+            await asyncio.sleep(2)
+            if token == self._attempt_token:
+                self._pending_display = None
+                self.async_write_ha_state()
+
+        if self.hass:
+            self.hass.async_create_task(_revert())
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, entity_id: str = None):
+        if entity_id is None or entity_id == self._attr_unique_id:
+            self.async_write_ha_state()
+
+
+# ============================================================
 # ===== SETUP =====
 # ============================================================
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Setup piattaforma text: slot orari temporizzatori (SCHEDULER) + profilo termico termostati."""
+    """Setup piattaforma text: slot orari temporizzatori (SCHEDULER) + profilo termico termostati
+    + azioni centrale sicurezza (SICU)."""
 
     # --- Scheduler (timer) ---
     _LOGGER.debug("Setup piattaforma text (SCHEDULER)")
@@ -291,3 +437,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
         profile_entities = [DomoThermostatProfileText(t, entry.entry_id) for t in thermostats]
         async_add_entities(profile_entities)
         _LOGGER.info("Added %d thermal profile text entities", len(profile_entities))
+
+    hass.data[DOMAIN].setdefault("_sicu_action_texts_added", False)
+
+    # --- Sicurezza (azioni centrale: silence / reset_event_memory) ---
+    if get_security_device() and not hass.data[DOMAIN]["_sicu_action_texts_added"]:
+        async_add_entities([
+            DomoSicuActionText(entry.entry_id, "silence", "CODE - Silenzia sirene", "mdi:bell-off-outline"),
+            DomoSicuActionText(entry.entry_id, "reset_event_memory", "CODE - Reset memoria eventi", "mdi:refresh"),
+        ])
+        hass.data[DOMAIN]["_sicu_action_texts_added"] = True
+        _LOGGER.info("Added 2 text entities for SICU actions (silence / reset_event_memory)")
+    else:
+        _LOGGER.debug("SECURITY central not yet available, skipping SICU action texts")

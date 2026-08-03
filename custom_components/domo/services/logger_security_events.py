@@ -28,8 +28,7 @@ from ..platforms.sicu import AREA_STATUS_MAP, INPUT_STATUS_MAP, CENTRAL_STATUS_M
 
 _LOGGER = logging.getLogger(__name__)
 
-EVENT_LOG_PATH = Path("/config/security_events_logs/security_events.log")
-EVENT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+EVENT_LOG_PATH: Path | None = None
 
 
 # ============================================================
@@ -40,7 +39,16 @@ _event_logger = logging.getLogger("security_events")
 _event_logger.setLevel(logging.INFO)
 _event_logger.propagate = False
 
-if not _event_logger.handlers:
+
+def _setup_file_logger(hass) -> None:
+    """Crea directory e handler del logger su file. Eseguito in executor."""
+    global EVENT_LOG_PATH
+    if _event_logger.handlers:
+        return
+
+    EVENT_LOG_PATH = Path(hass.config.path("security_events_logs", "security_events.log"))
+    EVENT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     handler = TimedRotatingFileHandler(
         EVENT_LOG_PATH,
         when="midnight",
@@ -53,7 +61,7 @@ if not _event_logger.handlers:
     formatter = logging.Formatter("%(message)s")
     handler.setFormatter(formatter)
     _event_logger.addHandler(handler)
-    
+
     header = "DATA,ORA,CENTRALE,RAW CENTRALE,STATO CENTRALE,AREA,RAW AREA,STATO AREA,INGRESSO,RAW INGRESSO,STATO INGRESSO"
     _event_logger.info(header)
 
@@ -66,6 +74,8 @@ class SecurityEventsLogger:
         self.hass = hass
         self._last_snapshot = None
         self._last_log_key = None
+
+        hass.add_job(_setup_file_logger, hass)
 
         async_dispatcher_connect(
             hass,
@@ -157,6 +167,6 @@ class SecurityEventsLogger:
         if current_key == self._last_log_key:
             return
             
-        _event_logger.info(log_line)
+        self.hass.add_job(_event_logger.info, log_line)
         self._last_log_key = current_key
         self._last_snapshot = data

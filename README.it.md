@@ -4,8 +4,7 @@
 ---
 
 [![Current release](https://img.shields.io/github/release/odoricof/Home-Sapiens-Assistant.svg?style=plastic&label=Current%20release)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
-[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=plastic)](https://github.com/odoricof/Home-Sapiens-Assistant)
-[![HACS Repository](https://img.shields.io/badge/HACS_Repository-%2341BDF5.svg?style=plastic&logo=homeassistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=odoricof&repository=Home-Sapiens-Assistant&category=integration)  
+[![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=plastic)](https://github.com/odoricof/Home-Sapiens-Assistant)  
 [![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![Buy me a beer 🍺🍺🍺](https://img.shields.io/badge/PayPal-Buy%20me%20a%20beer%20🍺🍺🍺-blue?style=plastic&logo=paypal)](https://paypal.me/odoricof)
 
@@ -39,6 +38,8 @@ Attualmente supportati:
    - Uscite
    - Scenari
    - Notifiche di trigger e allarmi
+   - Silenziamento sirene
+   - Cancellazione memoria eventi
 - Luci
 - Aperture
 - Scenari
@@ -49,7 +50,7 @@ Servizi aggiuntivi:
 
 - Notifiche di stato offline/online del server ETI/DOMO
 - Log settimanale degli eventi di sicurezza
-- Backup locale e ripristino di tutti i profili termici per entrambe le stagioni
+- Backup locale e ripristino di tutti i profili termici ti tutti i termostati per entrambe le stagioni
 ---
 
 ## Come funziona
@@ -66,13 +67,8 @@ Non essendo fornita un'API diretta dal produttore, l'integrazione interagisce co
 
 1. Apri HACS in Home Assistant  
 2. Vai su **Integrazioni**  
-3. Clicca sui tre puntini → **Repository personalizzate**  
-4. Aggiungi il repository `https://github.com/odoricof/Home-Sapiens-Assistant`
-
-   oppure clicca su [![HACS Repository](https://img.shields.io/badge/HACS_Repository-%2341BDF5.svg?style=plastic&logo=homeassistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=odoricof&repository=Home-Sapiens-Assistant&category=integration)
-5. Categoria: **Integrazione**  
-6. Cerca **Home Sapiens Assistant** e installa  
-7. Riavvia Home Assistant  
+3. Cerca **Home Sapiens Assistant** e installa  
+4. Riavvia Home Assistant  
 
 ---
 

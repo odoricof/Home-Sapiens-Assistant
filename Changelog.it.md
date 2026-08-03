@@ -178,3 +178,22 @@ I seguenti parametri sono ora esposti sia in lettura che in scrittura:
 - La centrale allarme ora espone solo gli scenari effettivamente configurati nell'impianto. **Away** è sempre disponibile, mentre **Night** e **Home** vengono create solo quando i rispettivi scenari esistono e contengono aree configurate.
 - Corretto un problema per cui, su alcuni impianti l'app poteva mostrare il pulsante sbagliato al posto di "resto in casa" (es. "notte"). Ora il sistema riconosce ogni scenario dal suo nome reale sulla centrale, non da un ordine fisso presunto.
 - Aggiunto il riconoscimento automatico di eventuale scenario "custom" configurato sulla centrale, che prima non veniva gestito.
+
+## [1.7.0] - 2026-08-02
+
+### Novità distribuzione
+
+- 🎉 L'integrazione è stata inserita nel catalogo ufficiale di HACS.<br>
+D'ora in poi è installabile con una semplice ricerca, senza configurazioni aggiuntive.
+
+### Aggiunto
+
+![alarm](images/alarm.png)
+
+- Allarme, tacitazione sirena: Nuovo comando per tacitare la sirena dell'allarme direttamente da Home Assistant, digitando il proprio codice su un'apposita entità testuale.
+
+- Allarme, cancellazione memoria eventi: Nuovo comando per azzerare la memoria degli eventi di allarme registrati dalla centrale, direttamente da Home Assistant, digitando il proprio codice su un'apposita entità testuale.
+
+### Fix Minori
+
+- SecurityEventsLogger ora utilizza un percorso di log portabile tramite hass.config.path() invece di un percorso /config fisso, e le operazioni di I/O su file (creazione directory, scrittura log) vengono eseguite in un executor per non bloccare il event loop.
