@@ -16,11 +16,15 @@ import asyncio
 import json
 import logging
 import time
+
 import aiohttp
+
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+
 from .const import SIGNAL_GATEWAY_ONLINE, SIGNAL_GATEWAY_OFFLINE
 
 _LOGGER = logging.getLogger(__name__)
+
 
 DEFAULT_USERNAME = "admin"
 DEFAULT_PASSWORD = "admin"
@@ -30,6 +34,8 @@ STATUS_UPDATE_CMD = "status_update_req"
 
 
 class DomoGateway:
+    """DOMO/ETI gateway client: handles login, polling, keep-alive and command TX."""
+
     def __init__(
         self,
         hass,
@@ -54,7 +60,7 @@ class DomoGateway:
         self._task: asyncio.Task | None = None
         self._task_keep_alive: asyncio.Task | None = None
         self._event_callbacks = []
-     
+
         self._was_connected = True
 
     async def test_connection(self):
@@ -67,19 +73,16 @@ class DomoGateway:
             _LOGGER.error("Connection test failed: %s", err)
             return False
         finally:
-            await self.stop() 
-         
-     
-     
-     
+            await self.stop()
+
     def register_event_callback(self, callback):
         """Registers a function to be called for each received event."""
         self._event_callbacks.append(callback)
-        _LOGGER.debug("DOMO Event callback registered, total: %d", len(self._event_callbacks))        
+        _LOGGER.debug("DOMO Event callback registered, total: %d", len(self._event_callbacks))
 
-    # --------------------------------------------------
-    # Lifecycle
-    # --------------------------------------------------
+    # ============================================================
+    # ===== LIFECYCLE =====
+    # ============================================================
 
     async def start(self):
         """Gateway Start"""
@@ -124,9 +127,9 @@ class DomoGateway:
             await self._session.close()
             self._session = None
 
-    # --------------------------------------------------
-    # Core loop
-    # --------------------------------------------------
+    # ============================================================
+    # ===== CORE LOOP =====
+    # ============================================================
 
     async def _poll_loop(self):
         """Long polling loop."""
@@ -136,9 +139,10 @@ class DomoGateway:
             except Exception as err:
                 _LOGGER.error("DOMO rx_status error: %s", err)
 
-    # --------------------------------------------------
-    # Keep-alive loop
-    # --------------------------------------------------
+    # ============================================================
+    # ===== KEEP-ALIVE LOOP =====
+    # ============================================================
+
     async def _keep_alive_loop(self):
         """Periodically sends keep-alive to keep the session active."""
         while self._running and self._client_id:
@@ -157,9 +161,9 @@ class DomoGateway:
                 _LOGGER.error("DOMO keep-alive failed: %s", err)
             await asyncio.sleep(self._keep_alive_sec / 2)
 
-    # --------------------------------------------------
-    # HTTP helpers
-    # --------------------------------------------------
+    # ============================================================
+    # ===== HTTP HELPERS =====
+    # ============================================================
 
     def _endpoint_url(self) -> str:
         return f"http://{self.host}{DOMO_ENDPOINT}"
@@ -194,9 +198,9 @@ class DomoGateway:
             _LOGGER.error("DOMO HTTP error: %s", err)
             raise
 
-    # --------------------------------------------------
-    # Login / session
-    # --------------------------------------------------
+    # ============================================================
+    # ===== LOGIN / SESSION =====
+    # ============================================================
 
     async def _login(self):
         """Login ETI/Domo (registration request)."""
@@ -226,13 +230,13 @@ class DomoGateway:
             self._client_id,
             self._keep_alive_sec,
         )
-        
+
     def _session_valid(self) -> bool:
         return bool(self._client_id) and time.monotonic() < self._session_expire_ts
 
-    # --------------------------------------------------
-    # RX STATUS
-    # --------------------------------------------------
+    # ============================================================
+    # ===== RX STATUS =====
+    # ============================================================
 
     async def rx_status(self):
         if not self._session_valid():
@@ -242,7 +246,7 @@ class DomoGateway:
                 _LOGGER.debug("DOMO login failed (offline?): %s", err)
                 await asyncio.sleep(30)
                 return
-            
+
         payload = {
             "sl_cmd": "sl_data_req",
             "sl_appl_msg_type": "domo",
@@ -254,35 +258,35 @@ class DomoGateway:
 
         try:
             resp = await self._post(payload)
-            
+
             if not self._was_connected:
                 self._was_connected = True
                 self.online = True
                 _LOGGER.info("DOMO gateway ONLINE")
                 async_dispatcher_send(self.hass, SIGNAL_GATEWAY_ONLINE)
-                await asyncio.sleep(30) 
+                await asyncio.sleep(30)
                 return
-                
+
             cmd_name = resp.get("cmd_name")
-            
+
             if cmd_name == "generic_reply":
                 _LOGGER.debug("DOMO generic_reply: %s", resp)
                 return
 
             if cmd_name == "status_update_resp":
                 events = resp.get("result", []) or []
-                
+
                 if events:
-                    _LOGGER.debug("🔁 DOMO received %d events", len(events))
-                    
+                    _LOGGER.debug("DOMO received %d events", len(events))
+
                     for event in events:
                         cmd = event.get("cmd_name", "unknown")
                         _LOGGER.debug(
-                            "🔁 DOMO RX cmd_name=%s payload=%s",
+                            "DOMO RX cmd_name=%s payload=%s",
                             cmd,
                             event,
                         )
-                    
+
                         for callback in self._event_callbacks:
                             try:
                                 if asyncio.iscoroutinefunction(callback):
@@ -290,8 +294,8 @@ class DomoGateway:
                                 else:
                                     callback(self, event)
                             except Exception as err:
-                                _LOGGER.error("DOMO Error in event callback: %s", err)                  
-                        
+                                _LOGGER.error("DOMO Error in event callback: %s", err)
+
                 else:
                     _LOGGER.debug("DOMO status_update_resp with no events")
 
@@ -302,8 +306,7 @@ class DomoGateway:
                 if cmd_name is None:
                     _LOGGER.warning("DOMO session lost, forcing re-login")
                     self._session_expire_ts = 0
-                    
-                    
+
         except asyncio.TimeoutError:
             _LOGGER.debug("DOMO rx_status timeout - no events")
         except aiohttp.ClientConnectorError as err:
@@ -312,15 +315,15 @@ class DomoGateway:
                 self.online = False
                 _LOGGER.error("DOMO gateway OFFLINE: %s", err)
                 async_dispatcher_send(self.hass, SIGNAL_GATEWAY_OFFLINE)
-            return   
+            return
         except Exception as err:
             _LOGGER.error("DOMO rx_status error: %s", err)
             self._session_expire_ts = 0
-            
-    # --------------------------------------------------
-    # TX COMMAND
-    # --------------------------------------------------            
-            
+
+    # ============================================================
+    # ===== TX COMMAND =====
+    # ============================================================
+
     async def tx_command(self, payload: dict, resp_command: str | None = None) -> dict | None:
         _LOGGER.debug("DOMO tx_command: %s", payload.get("cmd_name"))
         if not self._session_valid():
@@ -337,31 +340,30 @@ class DomoGateway:
         for attempt in range(2):
             try:
                 resp = await self._post(request_payload)
-                
+
                 if resp_command and resp.get("cmd_name") != resp_command:
                     _LOGGER.warning(
                         "DOMO Unexpected response command: expected %s, got %s",
                         resp_command,
                         resp.get("cmd_name"),
                     )
-                
+
                 return resp
-            
+
             except TimeoutError:
                 if attempt == 0:
-                    _LOGGER.debug("DOMO tx_command timeout, retrying: %s - PAYLOAD: %s", 
+                    _LOGGER.debug("DOMO tx_command timeout, retrying: %s - PAYLOAD: %s",
                                   payload.get("cmd_name"), payload)
                     continue
                 else:
-                    _LOGGER.error("DOMO tx_command failed after retry: %s - PAYLOAD: %s", 
+                    _LOGGER.error("DOMO tx_command failed after retry: %s - PAYLOAD: %s",
                                   payload.get("cmd_name"), payload)
                     return None
 
             except Exception as err:
-                _LOGGER.error("DOMO tx_command failed: %s - %s - PAYLOAD: %s", 
+                _LOGGER.error("DOMO tx_command failed: %s - %s - PAYLOAD: %s",
                               type(err).__name__, err, payload)
                 return None
-
 
     def get_cseq(self) -> int:
         self._cseq += 1

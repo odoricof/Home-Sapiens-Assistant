@@ -1,13 +1,11 @@
 """
 domo/switch.py
 
-Entities fed by this file:
+Entities fed by:
 - platforms/activations.py
 - platforms/scheduler.py
 - platforms/irrigation.py
-
-Entities fed by:
-- platforms/thermoregulation.py
+- platforms/loadsctrl.py
 
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
@@ -16,6 +14,8 @@ License: MIT
 This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
 Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
+
+status: passed
 """
 from __future__ import annotations
 
@@ -24,63 +24,158 @@ import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.exceptions import HomeAssistantError
 
-from .const import DOMAIN, SIGNAL_UPDATE_ENTITY, SIGNAL_DISCOVERY_NEW
+from .const import DOMAIN, SIGNAL_DISCOVERY_NEW, SIGNAL_UPDATE_ENTITY
 from .platforms.activations import DomoActivation, get_all_activations
-from .platforms.scheduler import (
-    DomoTimer,
-    get_all_timers,
-    WEEKDAYS,
-    async_set_timer_enabled,
-    async_set_timer_day,
-)
 from .platforms.irrigation import (
     DomoIrrigationZone,
-    get_all_irrigation_zones,
-    async_set_irrigation_enabled,
-    async_set_irrigation_day,
-    async_force_irrigation,
-    async_set_sprinkler_enabled,
     WEEKDAYS as IRRIGATION_WEEKDAYS,
+    async_force_irrigation,
+    async_set_irrigation_day,
+    async_set_irrigation_enabled,
+    async_set_sprinkler_enabled,
+    get_all_irrigation_zones,
+)
+from .platforms.loadsctrl import (
+    DomoLoadCtrlMeter,
+    DomoLoadCtrlRelay,
+    async_set_loadsctrl_relay_enabled,
+    get_all_loadsctrl_relays,
+)
+from .platforms.scheduler import (
+    DomoTimer,
+    WEEKDAYS,
+    async_set_timer_day,
+    async_set_timer_enabled,
+    get_all_timers,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
 # ============================================================
-# DEVICE INFO CONDIVISI
+# ===== SETUP ENTRY =====
 # ============================================================
-def _timer_device_info(timer: DomoTimer, entry_id: str) -> DeviceInfo:
-    """DeviceInfo del device 'temporizzatore', condiviso da tutte le entita'
-    agganciate allo stesso timer."""
-    return DeviceInfo(
-        identifiers={(DOMAIN, f"{entry_id}_timer_{timer.timer_id}")},
-        name=timer.name,
-        manufacturer="Home Sapiens Assistant",
-        model="Eti/Domo",
+
+async def async_setup_entry(hass, entry, async_add_entities):
+    """Set up switch platform for activations, timers, irrigation and load control."""
+
+    # --- Activations ---
+    activations = get_all_activations()
+    if activations:
+        activations_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{entry.entry_id}_activations")},
+            name="Activations",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
+        )
+        entities = [
+            DomoSwitchEntity(activation, activations_device_info, entry.entry_id)
+            for activation in activations
+        ]
+        async_add_entities(entities)
+        _LOGGER.info("Added %d switch entities for activations", len(entities))
+    else:
+        _LOGGER.debug("No activations found")
+
+    # --- Timers (Scheduler) ---
+    scheduler_added_ids: set[int] = set()
+
+    def _add_timer_switches(timer: DomoTimer):
+        if timer.timer_id in scheduler_added_ids:
+            return
+        scheduler_added_ids.add(timer.timer_id)
+        entities = [
+            DomoTimerEnabledSwitch(timer, entry.entry_id),
+            *[DomoTimerWeekdaySwitch(timer, wd, entry.entry_id) for wd in WEEKDAYS],
+        ]
+        async_add_entities(entities)
+        _LOGGER.info(
+            "Added %d switch entities for timer id=%s (%s)",
+            len(entities), timer.timer_id, timer.name,
+        )
+
+    for timer in get_all_timers():
+        _add_timer_switches(timer)
+
+    @callback
+    def _async_new_scheduler_timer(timer: DomoTimer):
+        _add_timer_switches(timer)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, SIGNAL_DISCOVERY_NEW.format("switch"), _async_new_scheduler_timer
+        )
+    )
+
+    # --- Irrigation (zones + sprinklers) ---
+    irrigation_added_ids: set[int] = set()
+
+    def _add_irrigation_switches(zone: DomoIrrigationZone):
+        if zone.zone_id in irrigation_added_ids:
+            return
+        irrigation_added_ids.add(zone.zone_id)
+        entities = [
+            DomoIrrigationEnabledSwitch(zone, entry.entry_id),
+            DomoIrrigationForceSwitch(zone, entry.entry_id),
+            *[DomoIrrigationDaySwitch(zone, wd, entry.entry_id) for wd in IRRIGATION_WEEKDAYS],
+            *[DomoSprinklerSwitch(zone, spr.act_id, entry.entry_id) for spr in zone.sprinklers],
+        ]
+        async_add_entities(entities)
+        _LOGGER.info(
+            "Added %d switch entities for irrigation zone id=%s (%s)",
+            len(entities), zone.zone_id, zone.name,
+        )
+
+    for zone in get_all_irrigation_zones():
+        _add_irrigation_switches(zone)
+
+    @callback
+    def _async_new_irrigation_zone(zone: DomoIrrigationZone):
+        _add_irrigation_switches(zone)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, SIGNAL_DISCOVERY_NEW.format("irrigation_switch"), _async_new_irrigation_zone
+        )
+    )
+
+    # --- Load Control (loadsctrl) ---
+    loadsctrl_added_ids: set[int] = set()
+
+    def _add_loadsctrl_switch(relay: DomoLoadCtrlRelay):
+        if relay.relay_id in loadsctrl_added_ids:
+            return
+        loadsctrl_added_ids.add(relay.relay_id)
+        async_add_entities([DomoLoadCtrlRelaySwitch(relay)])
+        _LOGGER.info(
+            "Added switch entity for load control relay id=%s (%s)",
+            relay.relay_id, relay.name,
+        )
+
+    for relay in get_all_loadsctrl_relays():
+        _add_loadsctrl_switch(relay)
+
+    @callback
+    def _async_new_loadsctrl_relay(relay: DomoLoadCtrlRelay):
+        _add_loadsctrl_switch(relay)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, SIGNAL_DISCOVERY_NEW.format("loadsctrl_switch"), _async_new_loadsctrl_relay
+        )
     )
 
 
-def _irrigation_zone_device_info(zone: DomoIrrigationZone, entry_id: str) -> DeviceInfo:
-    """DeviceInfo del device 'settore di irrigazione', condiviso da tutte le
-    entita' agganciate alla zona (inclusi gli sprinkler, che non hanno un
-    sub-device proprio)."""
-    return DeviceInfo(
-        identifiers={(DOMAIN, f"{entry_id}_irrigation_{zone.zone_id}")},
-        name=zone.name,
-        manufacturer="Home Sapiens Assistant",
-        model="Eti/Domo",
-    )
-
-
 # ============================================================
-# ENTITA' SWITCH PER LE ATTIVAZIONI (esistente)
+# ===== ACTIVATIONS =====
 # ============================================================
+
 class DomoSwitchEntity(SwitchEntity):
-    """Switch entity per attivazioni"""
+    """Switch for a generic activation (light, climate, gate, etc.)."""
 
     DEFAULT_ICON = "mdi:electric-switch"
     ICON_MAP = {
@@ -123,7 +218,7 @@ class DomoSwitchEntity(SwitchEntity):
     }
 
     def __init__(self, activation: DomoActivation, device_info: DeviceInfo, entry_id: str):
-        """Initialize the switch entity."""
+        """Inizializza lo switch per l'attivazione."""
         self._activation = activation
         self._attr_unique_id = activation.unique_id
         self._attr_name = activation.name
@@ -163,16 +258,32 @@ class DomoSwitchEntity(SwitchEntity):
 
 
 # ============================================================
-# ENTITA' SWITCH PER I TEMPORIZZATORI
+# ===== TIMERS =====
 # ============================================================
+
 _WEEKDAY_LABELS = {
-    "mon": "Lunedi'", "tue": "Martedi'", "wed": "Mercoledi'", "thu": "Giovedi'",
-    "fri": "Venerdi'", "sat": "Sabato", "sun": "Domenica",
+    "mon": "Lunedi'",
+    "tue": "Martedi'",
+    "wed": "Mercoledi'",
+    "thu": "Giovedi'",
+    "fri": "Venerdi'",
+    "sat": "Sabato",
+    "sun": "Domenica",
 }
 
 
+def _timer_device_info(timer: DomoTimer, entry_id: str) -> DeviceInfo:
+    """DeviceInfo for the 'timer' device, shared by all entities of the same timer."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{entry_id}_timer_{timer.timer_id}")},
+        name=timer.name,
+        manufacturer="Home Sapiens Assistant",
+        model="Eti/Domo",
+    )
+
+
 class DomoTimerEnabledSwitch(SwitchEntity):
-    """Entita' 'switch' per lo stato enabled/disabled del temporizzatore."""
+    """Switch to enable/disable a timer."""
 
     _attr_should_poll = False
 
@@ -197,7 +308,7 @@ class DomoTimerEnabledSwitch(SwitchEntity):
         try:
             await async_set_timer_enabled(self._timer.timer_id, value, self._timer.gateway)
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio timers_enable_req: {err}") from err
+            raise HomeAssistantError(f"Error sending timers_enable_req: {err}") from err
 
     async def async_added_to_hass(self):
         self.async_on_remove(
@@ -211,7 +322,7 @@ class DomoTimerEnabledSwitch(SwitchEntity):
 
 
 class DomoTimerWeekdaySwitch(SwitchEntity):
-    """Entita' 'switch' per un singolo giorno della settimana."""
+    """Switch to enable a single weekday in the timer."""
 
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.CONFIG
@@ -239,7 +350,7 @@ class DomoTimerWeekdaySwitch(SwitchEntity):
         try:
             await async_set_timer_day(self._timer.timer_id, day_index, value, self._timer.gateway)
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio timers_enable_day_req: {err}") from err
+            raise HomeAssistantError(f"Error sending timers_enable_day_req: {err}") from err
 
     async def async_added_to_hass(self):
         self.async_on_remove(
@@ -253,10 +364,21 @@ class DomoTimerWeekdaySwitch(SwitchEntity):
 
 
 # ============================================================
-# ENTITA' SWITCH PER L'IRRIGAZIONE
+# ===== IRRIGATION =====
 # ============================================================
+
+def _irrigation_zone_device_info(zone: DomoIrrigationZone, entry_id: str) -> DeviceInfo:
+    """DeviceInfo for the 'irrigation zone' device, shared by all entities of the zone."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{entry_id}_irrigation_{zone.zone_id}")},
+        name=zone.name,
+        manufacturer="Home Sapiens Assistant",
+        model="Eti/Domo",
+    )
+
+
 class DomoIrrigationEnabledSwitch(SwitchEntity):
-    """Entita' 'switch' per lo stato enabled/disabled di un settore di irrigazione."""
+    """Switch to enable/disable an irrigation zone."""
 
     _attr_should_poll = False
 
@@ -281,7 +403,7 @@ class DomoIrrigationEnabledSwitch(SwitchEntity):
         try:
             await async_set_irrigation_enabled(self._zone.zone_id, value, self._zone.gateway)
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio irrigation_set_req (enabled): {err}") from err
+            raise HomeAssistantError(f"Error sending irrigation_set_req (enabled): {err}") from err
 
     async def async_added_to_hass(self):
         self.async_on_remove(
@@ -295,7 +417,7 @@ class DomoIrrigationEnabledSwitch(SwitchEntity):
 
 
 class DomoIrrigationDaySwitch(SwitchEntity):
-    """Entita' 'switch' per un singolo giorno della settimana di un settore di irrigazione."""
+    """Switch to enable a single weekday for an irrigation zone."""
 
     _attr_should_poll = False
 
@@ -324,7 +446,7 @@ class DomoIrrigationDaySwitch(SwitchEntity):
                 self._zone.zone_id, day_index, value, self._zone.gateway
             )
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio irrigation_set_req (days): {err}") from err
+            raise HomeAssistantError(f"Error sending irrigation_set_req (days): {err}") from err
 
     async def async_added_to_hass(self):
         self.async_on_remove(
@@ -338,7 +460,7 @@ class DomoIrrigationDaySwitch(SwitchEntity):
 
 
 class DomoIrrigationForceSwitch(SwitchEntity):
-    """Entita' 'switch' per l'irrigazione forzata manuale."""
+    """Switch to manually force irrigation for a zone."""
 
     _attr_should_poll = False
     _attr_icon = "mdi:hand-back-right"
@@ -365,7 +487,7 @@ class DomoIrrigationForceSwitch(SwitchEntity):
         try:
             await async_force_irrigation(self._zone.zone_id, self._zone.gateway)
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio irrigation_force_req: {err}") from err
+            raise HomeAssistantError(f"Error sending irrigation_force_req: {err}") from err
 
     async def async_added_to_hass(self):
         self.async_on_remove(
@@ -379,7 +501,7 @@ class DomoIrrigationForceSwitch(SwitchEntity):
 
 
 class DomoSprinklerSwitch(SwitchEntity):
-    """Entita' 'switch' per abilitare/disabilitare il singolo irrigatore di un settore."""
+    """Switch to enable/disable a single sprinkler in a zone."""
 
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.CONFIG
@@ -426,7 +548,7 @@ class DomoSprinklerSwitch(SwitchEntity):
             )
         except Exception as err:
             raise HomeAssistantError(
-                f"Errore invio irrigation_set_req (sprinklers): {err}"
+                f"Error sending irrigation_set_req (sprinklers): {err}"
             ) from err
 
     async def async_added_to_hass(self):
@@ -441,88 +563,69 @@ class DomoSprinklerSwitch(SwitchEntity):
 
 
 # ============================================================
-# SETUP ENTRY (attivazioni + timer + irrigazione)
+# ===== LOAD CONTROL =====
 # ============================================================
-async def async_setup_entry(hass, entry, async_add_entities):
-    """Setup switch platform per attivazioni, temporizzatori e settori/irrigatori
-    di irrigazione."""
 
-    # ----- ATTIVAZIONI -----
-    activations = get_all_activations()
-    if activations:
-        activations_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_activations")},
-            name="Activations",
-            manufacturer="Home Sapiens Assistant",
-            model="Eti/Domo",
-        )
-        entities = [
-            DomoSwitchEntity(activation, activations_device_info, entry.entry_id)
-            for activation in activations
-        ]
-        async_add_entities(entities)
-        _LOGGER.info("Added %d switch entities for activations", len(entities))
-    else:
-        _LOGGER.debug("No activations found yet")
-
-    # ----- TEMPORIZZATORI (SCHEDULER) -----
-    scheduler_added_ids: set[int] = set()
-
-    def _add_timer_switches(timer: DomoTimer):
-        if timer.timer_id in scheduler_added_ids:
-            return
-        scheduler_added_ids.add(timer.timer_id)
-        entities = [
-            DomoTimerEnabledSwitch(timer, entry.entry_id),
-            *[DomoTimerWeekdaySwitch(timer, wd, entry.entry_id) for wd in WEEKDAYS],
-        ]
-        async_add_entities(entities)
-        _LOGGER.info(
-            "Added %d switch entities for timer id=%s (%s)",
-            len(entities), timer.timer_id, timer.name,
-        )
-
-    for timer in get_all_timers():
-        _add_timer_switches(timer)
-
-    @callback
-    def _async_new_scheduler_timer(timer: DomoTimer):
-        _add_timer_switches(timer)
-
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass, SIGNAL_DISCOVERY_NEW.format("switch"), _async_new_scheduler_timer
-        )
+def _loadsctrl_meter_device_info(meter: DomoLoadCtrlMeter) -> DeviceInfo:
+    """DeviceInfo for the load control manager (e.g. 'General'). Same identifiers used in domo/sensor.py."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, meter.unique_id)},
+        name=meter.name,
+        manufacturer="Home Sapiens Assistant",
+        model="Eti/Domo",
     )
 
-    # ----- IRRIGAZIONE (zone + sprinkler) -----
-    irrigation_added_ids: set[int] = set()
 
-    def _add_irrigation_switches(zone: DomoIrrigationZone):
-        if zone.zone_id in irrigation_added_ids:
-            return
-        irrigation_added_ids.add(zone.zone_id)
-        entities = [
-            DomoIrrigationEnabledSwitch(zone, entry.entry_id),
-            DomoIrrigationForceSwitch(zone, entry.entry_id),
-            *[DomoIrrigationDaySwitch(zone, wd, entry.entry_id) for wd in IRRIGATION_WEEKDAYS],
-            *[DomoSprinklerSwitch(zone, spr.act_id, entry.entry_id) for spr in zone.sprinklers],
-        ]
-        async_add_entities(entities)
-        _LOGGER.info(
-            "Added %d switch entities for irrigation zone id=%s (%s)",
-            len(entities), zone.zone_id, zone.name,
+class DomoLoadCtrlRelaySwitch(SwitchEntity):
+    """Switch to enable/disable control of a load (e.g. 'Kitchen appliances')."""
+
+    _attr_should_poll = False
+
+    def __init__(self, relay: DomoLoadCtrlRelay):
+        self._relay = relay
+        self._attr_unique_id = relay.unique_id
+        self._attr_name = relay.name
+        self._attr_device_info = _loadsctrl_meter_device_info(relay.meter)
+
+    @property
+    def is_on(self) -> bool:
+        return self._relay.enabled
+
+    @property
+    def icon(self) -> str:
+        if self._relay.is_detached:
+            return "mdi:power-plug-off"
+        return "mdi:power-plug"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            "priority": self._relay.priority,
+            "status": self._relay.status,
+            "detached": self._relay.is_detached,
+            "loadtype": self._relay.loadtype,
+        }
+
+    async def async_turn_on(self, **kwargs):
+        await self._async_set_enabled(1)
+
+    async def async_turn_off(self, **kwargs):
+        await self._async_set_enabled(0)
+
+    async def _async_set_enabled(self, value: int) -> None:
+        try:
+            await async_set_loadsctrl_relay_enabled(
+                self._relay.relay_id, value, self._relay.gateway
+            )
+        except Exception as err:
+            raise HomeAssistantError(f"Error sending loadsctrl_relay_set_req: {err}") from err
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
-
-    for zone in get_all_irrigation_zones():
-        _add_irrigation_switches(zone)
 
     @callback
-    def _async_new_irrigation_zone(zone: DomoIrrigationZone):
-        _add_irrigation_switches(zone)
-
-    entry.async_on_unload(
-        async_dispatcher_connect(
-            hass, SIGNAL_DISCOVERY_NEW.format("irrigation_switch"), _async_new_irrigation_zone
-        )
-    )
+    def _handle_update(self, entity_id: str = None):
+        if entity_id is None or entity_id == self._attr_unique_id:
+            self.async_write_ha_state()

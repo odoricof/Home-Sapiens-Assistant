@@ -75,6 +75,10 @@ _ALGO_PARAMS_TO_MODE = {
 # Dizionario globale per tenere traccia di tutti i termostati
 _THERMOSTATS: dict[int, "DomoThermostat"] = {}
 
+def current_weekday_name() -> str:
+    """Nome del giorno corrente, stesso formato di PROFILE_DAY_TO_ID."""
+    return PROFILE_ID_TO_DAY[datetime.now().weekday()]
+
 def _slot_to_time_str(slot_index: int) -> str:
     """Converte l'indice di quarto d'ora (0-95) in stringa HH:MM."""
     total_minutes = slot_index * QUARTER_MINUTES
@@ -376,6 +380,11 @@ class DomoThermostat:
         return f"climate.domo_{self.act_id}_{self.name.lower().replace(' ', '_')}"
 
     @property
+    def gateway(self):
+        """Restituisce il gateway associato al termostato."""
+        return self._gateway
+
+    @property
     def zone(self) -> str:
         """Restituisce la zona."""
         return self._zone
@@ -451,7 +460,11 @@ class DomoThermostat:
         
     @property
     def profile_data(self) -> Optional[str]:
-        """Restituisce la stringa grezza del profilo termico (96 caratteri) del giorno odierno."""
+        """Restituisce la stringa grezza del profilo termico (96 caratteri) attualmente in vigore."""
+        if self._mode == 3:  # Jolly
+            jolly_id = PROFILE_DAY_TO_ID["Jolly"]
+            if jolly_id in self._profile_raw_by_day:
+                return self._profile_raw_by_day[jolly_id]        
         today_id = PROFILE_DAY_TO_ID[_WEEKDAY_ORDER[datetime.now().weekday()]]
         if today_id in self._profile_raw_by_day:
             return self._profile_raw_by_day[today_id]

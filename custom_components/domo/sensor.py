@@ -1,4 +1,11 @@
-"""domo/sensor.py
+"""
+domo/sensor.py
+
+Entities fed by:
+- platforms/meters.py
+- platforms/loadsctrl.py
+- platforms/analogics.py
+- platforms/sicu.py
 
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
@@ -7,54 +14,78 @@ License: MIT
 This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
 Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
+
+status: passed
 """
 from __future__ import annotations
+
 import logging
 
 from homeassistant.components.sensor import (
-    SensorEntity,
     SensorDeviceClass,
+    SensorEntity,
     SensorStateClass,
 )
 from homeassistant.const import UnitOfEnergy, UnitOfPower
+from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.core import callback
 
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
 from .platforms.analogics import DomoAnalogIn, get_all_analogics
-from .platforms.meters import DomoMeter
-from .platforms.meters import get_all_meters
+from .platforms.loadsctrl import DomoLoadCtrlMeter, get_all_loadsctrl_meters
+from .platforms.meters import DomoMeter, get_all_meters
 from .platforms.sicu import (
-    get_security_device,
     AREA_STATUS_MAP,
     INPUT_STATUS_MAP,
+    get_security_device,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-# ============================================================================
-# SETUP PLATFORM
-# ============================================================================
+
+# ============================================================
+# ===== SETUP ENTRY =====
+# ============================================================
+
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Setup sensor platform"""
+    """Set up sensor platform for meters, load control, analog inputs and security."""
 
     meters = get_all_meters()
     analogics = get_all_analogics()
     security = get_security_device()
+    loadsctrl_meters = get_all_loadsctrl_meters()
 
     entities = []
 
-    # ------------------------------------------------------------------
-    # Sensori: misuratori di energia (potenza istantanea + energia incrementale)
-    # ------------------------------------------------------------------
+    # --- Energy meters ---
     for meter in meters:
         entities.append(DomoPowerSensor(meter, entry.entry_id))
         entities.append(DomoEnergySensor(meter, entry.entry_id))
 
-    # ------------------------------------------------------------------
-    # Sensori: ingressi analogici
-    # ------------------------------------------------------------------
+    # --- Load control ---
+    if loadsctrl_meters:
+        device_registry = dr.async_get(hass)
+        device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, "loadsctrl_root")},
+            name="Controlled loads",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
+        )
+        parent_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "loadsctrl_root")},
+            name="Controlled loads",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
+        )
+
+        for loadsctrl_meter in loadsctrl_meters:
+            entities.append(DomoLoadCtrlPowerSensor(loadsctrl_meter, parent_device_info))
+            _LOGGER.info("Added sensor for loadsctrl meter: %s (ID: %s)", loadsctrl_meter.name, loadsctrl_meter.meter_id)
+
+    # --- Analog inputs ---
     if analogics:
         analog_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry.entry_id}_analogics")},
@@ -67,36 +98,30 @@ async def async_setup_entry(hass, entry, async_add_entities):
             entities.append(DomoAnalogSensor(analog_in, analog_device_info, entry.entry_id))
         _LOGGER.debug("Added %d analog sensor entities", len(analogics))
 
-    # ------------------------------------------------------------------
-    # Sensori: allarme - ingressi sicurezza
-    # (raggruppati sotto il device "Alarm" creato dall'alarm panel)
-    # ------------------------------------------------------------------
+    # --- Security inputs ---
     if security and hasattr(security, "_inputs") and security._inputs:
         security_inputs_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "burlgar_alarm_inputs")},
+            identifiers={(DOMAIN, "burglar_alarm_inputs")},
             name="Security Inputs",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
-            via_device=(DOMAIN, "burlgar_alarm"),
+            via_device=(DOMAIN, "burglar_alarm"),
         )
-        
+
         for inp in security._inputs:
             input_id = inp.get("input_id")
             input_name = inp.get("name", f"Sensore {input_id}")
             entities.append(SecurityInputSensor(security, input_id, input_name, security_inputs_device_info))
             _LOGGER.info("Added sensor for security input: %s (ID: %s)", input_name, input_id)
 
-    # ------------------------------------------------------------------
-    # Sensori: allarme - aree sicurezza
-    # (raggruppati sotto il device "Alarm" creato dall'alarm panel)
-    # ------------------------------------------------------------------
+    # --- Security areas ---
     if security and hasattr(security, "_areas") and security._areas:
         security_areas_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "burlgar_alarm_areas")},
+            identifiers={(DOMAIN, "burglar_alarm_areas")},
             name="Security Areas",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
-            via_device=(DOMAIN, "burlgar_alarm"),
+            via_device=(DOMAIN, "burglar_alarm"),
         )
 
         for area in security._areas:
@@ -107,53 +132,51 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     if entities:
         async_add_entities(entities)
-        _LOGGER.debug("Added %d total sensor entities (meters + analogics + security inputs + security areas)", len(entities))
+        _LOGGER.debug("Added %d total sensor entities (meters + loadsctrl + analogics + security inputs + security areas)", len(entities))
     else:
         _LOGGER.debug("No sensors found to setup")
 
 
-# ============================================================================
-# SEZIONE: SENSORI ENERGIA (misuratori)
-# ============================================================================
-class DomoPowerSensor(SensorEntity):
-    """Sensore di potenza istantanea."""
+# ============================================================
+# ===== ENERGY SENSORS =====
+# ============================================================
 
-    def __init__(self, meter: DomoMeter, entry_id: str): 
+class DomoPowerSensor(SensorEntity):
+    """Instant power sensor."""
+
+    _attr_should_poll = False
+    _attr_entity_registry_visible_default = True
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+
+    def __init__(self, meter: DomoMeter, entry_id: str):
         self._meter = meter
         self._attr_unique_id = meter.unique_id_power
         self._attr_name = f"{meter.name} Potenza"
-        self._attr_should_poll = False
-        self._attr_entity_registry_visible_default = True
-        
-        # Configurazione device class
-        self._attr_device_class = SensorDeviceClass.POWER
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_native_unit_of_measurement = UnitOfPower.WATT
-        
-        # DEVICE INFO
+
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_sensors")},
-            name="Sensors",
+            name="Energy Sensors",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
-        )        
-        
-        # Icona appropriata in base al tipo
+        )
+
         if meter.is_production:
             self._attr_icon = "mdi:solar-power"
         else:
             self._attr_icon = "mdi:lightning-bolt"
-        
-        _LOGGER.debug("Created power sensor: %s", self._attr_name)
+
+        _LOGGER.debug("Power sensor created: %s", self._attr_name)
 
     @property
     def native_value(self):
-        """Restituisce la potenza istantanea."""
+        """Return the instant power."""
         return self._meter.instant_power
 
     @property
     def extra_state_attributes(self):
-        """Attributi aggiuntivi."""
+        """Additional attributes."""
         return {
             "meter_id": self._meter.meter_id,
             "meter_type": "production" if self._meter.is_production else "consumption",
@@ -162,67 +185,56 @@ class DomoPowerSensor(SensorEntity):
         }
 
     async def async_added_to_hass(self):
-        """Registra per gli aggiornamenti."""
+        """Register for updates."""
         self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_UPDATE_ENTITY,
-                self._handle_update,
-            )
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
 
     @callback
     def _handle_update(self, entity_id: str = None):
-        """Gestisce aggiornamenti."""
+        """Handle updates."""
         if entity_id is None or entity_id == self._attr_unique_id:
             self.async_write_ha_state()
 
 
 class DomoEnergySensor(SensorEntity):
-    """Sensore di energia incrementale (consumo/produzione)."""
+    """Incremental energy sensor (consumption/production)."""
+
+    _attr_should_poll = False
+    _attr_entity_registry_visible_default = True
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     def __init__(self, meter: DomoMeter, entry_id: str):
         self._meter = meter
-        
-        # Unique ID diverso per consumo e produzione
         self._attr_unique_id = meter.unique_id_energy
-        
-        # Nome appropriato
+
         type_str = "Produzione" if meter.is_production else "Consumo"
         self._attr_name = f"{meter.name} {type_str}"
-        
-        self._attr_should_poll = False
-        self._attr_entity_registry_visible_default = True
-        
-        # Configurazione device class
-        self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-        
-        # DEVICE INFO
+
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_sensors")},
-            name="Sensors",
+            name="Energy Sensors",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
-        )        
-        
-        # Icona appropriata
+        )
+
         if meter.is_production:
             self._attr_icon = "mdi:solar-panel"
         else:
             self._attr_icon = "mdi:home-lightning-bolt-outline"
-        
-        _LOGGER.debug("Created energy sensor: %s", self._attr_name)
+
+        _LOGGER.debug("Energy sensor created: %s", self._attr_name)
 
     @property
     def native_value(self):
-        """Restituisce il valore incrementale (last_24h_avg)."""
+        """Return the incremental value (last_24h_avg)."""
         return self._meter.last_24h_avg / 1000
 
     @property
     def extra_state_attributes(self):
-        """Attributi aggiuntivi."""
+        """Additional attributes."""
         return {
             "meter_id": self._meter.meter_id,
             "meter_type": "production" if self._meter.is_production else "consumption",
@@ -232,106 +244,94 @@ class DomoEnergySensor(SensorEntity):
         }
 
     async def async_added_to_hass(self):
-        """Registra per gli aggiornamenti."""
+        """Register for updates."""
         self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_UPDATE_ENTITY,
-                self._handle_update,
-            )
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
 
     @callback
     def _handle_update(self, entity_id: str = None):
-        """Gestisce aggiornamenti."""
+        """Handle updates."""
         if entity_id is None or entity_id == self._attr_unique_id:
             self.async_write_ha_state()
 
 
-# ============================================================================
-# SEZIONE: SENSORI ANALOGICI
-# ============================================================================
+# ============================================================
+# ===== LOAD CONTROL =====
+# ============================================================
+
+class DomoLoadCtrlPowerSensor(SensorEntity):
+    """Instant power sensor for the power source (load control)."""
+
+    _attr_should_poll = False
+    _attr_entity_registry_visible_default = True
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    _attr_icon = "mdi:connection"
+
+    def __init__(self, meter: DomoLoadCtrlMeter, device_info: DeviceInfo):
+        self._meter = meter
+        self._attr_unique_id = f"{meter.unique_id}_power"
+        self._attr_name = meter.name
+        self._attr_device_info = device_info
+
+        _LOGGER.debug("Load control power sensor created: %s", self._attr_name)
+
+    @property
+    def native_value(self):
+        """Return the instant power."""
+        return self._meter.power
+
+    @property
+    def extra_state_attributes(self):
+        """Additional attributes."""
+        return {
+            "max_power": self._meter.max_power,
+            "hysteresis": self._meter.hysteresis,
+            "energy_meter_id": self._meter.energy_meter_id,
+            "load_count": len(self._meter.relays),
+        }
+
+    async def async_added_to_hass(self):
+        """Register for updates."""
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, entity_id: str = None):
+        """Handle updates."""
+        if entity_id is None or entity_id == self._attr_unique_id:
+            self.async_write_ha_state()
+
+
+# ============================================================
+# ===== ANALOG SENSORS =====
+# ============================================================
+
 class DomoAnalogSensor(SensorEntity):
-    """Sensore per ingressi analogici ETI Domo."""
+    """Sensor for ETI Domo analog inputs."""
+
+    _attr_should_poll = False
+    _attr_suggested_display_precision = 0
+    _attr_device_class = None
 
     def __init__(self, analog_in: DomoAnalogIn, device_info: DeviceInfo, entry_id: str):
-        """Initialize the analog sensor."""
         self._analog_in = analog_in
         self._attr_unique_id = analog_in.unique_id
         self._attr_name = analog_in.name
-        self._attr_should_poll = False
         self._attr_device_info = device_info
-        
-        # Imposta l'unità di misura SOLO se non è vuota
+
         if analog_in.unit and analog_in.unit.strip():
             self._attr_native_unit_of_measurement = analog_in.unit
         else:
-            self._attr_native_unit_of_measurement = None  # Nessuna unità
-        
-        self._attr_suggested_display_precision = 0
-        
-        # Imposta l'icona in base all'unità di misura
-        self._attr_icon = self._get_icon_for_unit(analog_in.unit)
-        
-        # Device class per sensori analogici (opzionale)
-        self._attr_device_class = None  # Generico, non c'è una classe specifica
-        
-        _LOGGER.debug("Created analog sensor: %s (ID: %d) - unit: %s, icon: %s", 
-                     self._attr_name, analog_in.act_id, self._attr_native_unit_of_measurement, self._attr_icon)
+            self._attr_native_unit_of_measurement = None
 
-    def _get_icon_for_unit(self, unit: str) -> str:
-        """Restituisce l'icona appropriata in base all'unità di misura."""
-        if not unit:
-            return "mdi:gauge"  # Icona generica per numero puro
-        
-        unit_lower = unit.lower()
-        
-        # Temperatura
-        if unit_lower in ["°c", "c", "celsius", "°f", "f", "fahrenheit"]:
-            return "mdi:thermometer"
-        
-        # Umidità
-        if unit_lower in ["%", "percent", "humidity"]:
-            return "mdi:water-percent"
-        
-        # Tensione
-        if unit_lower in ["v", "volt", "mv", "millivolt"]:
-            return "mdi:flash"
-        
-        # Corrente
-        if unit_lower in ["a", "ampere", "ma", "milliampere"]:
-            return "mdi:current-ac"
-        
-        # Pressione
-        if unit_lower in ["bar", "psi", "kpa", "pa", "hpa"]:
-            return "mdi:gauge"
-        
-        # Velocità
-        if unit_lower in ["m/s", "km/h", "mph", "knot"]:
-            return "mdi:speedometer"
-        
-        # Luminosità
-        if unit_lower in ["lux", "lm", "lumen"]:
-            return "mdi:brightness-5"
-        
-        # Suono
-        if unit_lower in ["db", "decibel"]:
-            return "mdi:volume-high"
-        
-        # CO2 / qualità aria
-        if unit_lower in ["ppm", "co2"]:
-            return "mdi:molecule-co2"
-        
-        # Frequenza
-        if unit_lower in ["hz", "khz", "mhz"]:
-            return "mdi:sine-wave"
-        
-        # Angolo
-        if unit_lower in ["°", "deg", "degree", "rad"]:
-            return "mdi:rotate-3d"
-        
-        # Icona generica per unità sconosciuta
-        return "mdi:gauge"
+        self._attr_icon = self._get_icon_for_unit(analog_in.unit)
+
+        _LOGGER.debug("Analog sensor created: %s (ID: %d) - unit: %s, icon: %s",
+                     self._attr_name, analog_in.act_id, self._attr_native_unit_of_measurement, self._attr_icon)
 
     @property
     def native_value(self) -> int | float | None:
@@ -347,42 +347,81 @@ class DomoAnalogSensor(SensorEntity):
             "unit_raw": self._analog_in.unit,
         }
 
+    def _get_icon_for_unit(self, unit: str) -> str:
+        """Return the appropriate icon based on the unit of measurement."""
+        if not unit:
+            return "mdi:gauge"
+
+        unit_lower = unit.lower()
+
+        if unit_lower in ["°c", "c", "celsius", "°f", "f", "fahrenheit"]:
+            return "mdi:thermometer"
+
+        if unit_lower in ["%", "percent", "humidity"]:
+            return "mdi:water-percent"
+
+        if unit_lower in ["v", "volt", "mv", "millivolt"]:
+            return "mdi:flash"
+
+        if unit_lower in ["a", "ampere", "ma", "milliampere"]:
+            return "mdi:current-ac"
+
+        if unit_lower in ["bar", "psi", "kpa", "pa", "hpa"]:
+            return "mdi:gauge"
+
+        if unit_lower in ["m/s", "km/h", "mph", "knot"]:
+            return "mdi:speedometer"
+
+        if unit_lower in ["lux", "lm", "lumen"]:
+            return "mdi:brightness-5"
+
+        if unit_lower in ["db", "decibel"]:
+            return "mdi:volume-high"
+
+        if unit_lower in ["ppm", "co2"]:
+            return "mdi:molecule-co2"
+
+        if unit_lower in ["hz", "khz", "mhz"]:
+            return "mdi:sine-wave"
+
+        if unit_lower in ["°", "deg", "degree", "rad"]:
+            return "mdi:rotate-3d"
+
+        return "mdi:gauge"
+
     async def async_added_to_hass(self):
-        """When entity is added to hass."""
+        """Register for updates."""
         self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_UPDATE_ENTITY,
-                self._handle_update,
-            )
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
 
     @callback
     def _handle_update(self, entity_id: str = None):
-        """Handle update from bus."""
+        """Handle updates."""
         if entity_id is None or entity_id == self._attr_unique_id:
             self.async_write_ha_state()
 
 
-# ============================================================================
-# SEZIONE: SENSORI ALLARME - INGRESSI SICUREZZA
-# ============================================================================
+# ============================================================
+# ===== SECURITY INPUTS =====
+# ============================================================
+
 class SecurityInputSensor(SensorEntity):
-    def __init__(self, security, input_id: int, name: str, device_info: DeviceInfo, sensor_type: int = None):
+    """Sensor for a security panel input."""
+
+    _attr_should_poll = False
+
+    def __init__(self, security, input_id: int, name: str, device_info: DeviceInfo):
         self._security = security
         self._input_id = input_id
         self._attr_unique_id = f"{security.unique_id}_input_{input_id}"
         self._attr_name = f"Security {name}"
-        self._attr_should_poll = False
         self._attr_device_info = device_info
-        self._sensor_type = sensor_type
-        
-        # Inizializza lo stato come fa DomoLight
+
         self._state = "Sconosciuto"
         self._raw_status = None
         self._areas = []
-        
-        # Cerca lo stato iniziale nei dati già disponibili
+
         for inp in security._inputs:
             if inp.get("input_id") == input_id:
                 raw_status = inp.get("status")
@@ -390,12 +429,12 @@ class SecurityInputSensor(SensorEntity):
                 self._state = INPUT_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
                 self._areas = inp.get("areas", [])
                 break
-        
+
         _LOGGER.debug("Security input %s initial state: %s", name, self._state)
-        
+
     @property
     def icon(self) -> str:
-        """Icona basata sullo stato."""
+        """Icon based on the state."""
         if self._state == "Allarme":
             return "mdi:alarm-light"
         if self._state == "Aperto":
@@ -409,72 +448,79 @@ class SecurityInputSensor(SensorEntity):
         if self._state == "Batteria scarica":
             return "mdi:battery-low"
         return "mdi:sensor"
-        
+
     @property
     def native_value(self) -> str:
-        """Restituisce lo stato testuale del sensore."""
+        """Return the textual state of the sensor."""
         return self._state or "Sconosciuto"
-        
+
     @property
     def extra_state_attributes(self) -> dict:
-        """Attributi aggiuntivi."""
+        """Additional attributes."""
         return {
             "raw_status": self._raw_status,
             "areas": self._areas,
         }
 
+    def _refresh_from_snapshot(self) -> bool:
+        """Update the state from the last received snapshot, return True if found."""
+        snapshot = getattr(self._security, "_last_snapshot", None)
+        if not snapshot:
+            return False
+        for inp in snapshot.get("inputs", []):
+            if inp.get("input_id") == self._input_id:
+                raw_status = inp.get("status")
+                self._raw_status = raw_status
+                self._state = INPUT_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
+                self._areas = inp.get("areas", [])
+                return True
+        return False
+
     async def async_added_to_hass(self):
-        """When entity is added to hass."""
-        @callback
-        def handle_update(entity_id: str = None):
-            """Handle update from bus."""
-            if entity_id and entity_id != self._attr_unique_id:
-                return
-            snapshot = getattr(self._security, "_last_snapshot", None)
-            if snapshot:
-                for inp in snapshot.get("inputs", []):
-                    if inp.get("input_id") == self._input_id:
-                        raw_status = inp.get("status")
-                        self._raw_status = raw_status
-                        self._state = INPUT_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
-                        self._areas = inp.get("areas", [])
-                        self.async_write_ha_state()
-                        break
-        
+        """Register for updates."""
         self.async_on_remove(
-            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, handle_update)
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
 
+    @callback
+    def _handle_update(self, entity_id: str = None):
+        """Handle updates."""
+        if entity_id and entity_id != self._attr_unique_id:
+            return
+        if self._refresh_from_snapshot():
+            self.async_write_ha_state()
 
-# ============================================================================
-# SEZIONE: SENSORI ALLARME - AREE SICUREZZA
-# ============================================================================
+
+# ============================================================
+# ===== SECURITY AREAS =====
+# ============================================================
+
 class SecurityAreaSensor(SensorEntity):
-    """Sensor entity per le aree della centrale sicurezza."""
-    
+    """Sensor for a security panel area."""
+
+    _attr_should_poll = False
+
     def __init__(self, security, area_id: int, name: str, device_info: DeviceInfo):
         self._security = security
         self._area_id = area_id
         self._attr_unique_id = f"{security.unique_id}_area_{area_id}"
         self._attr_name = f"Security {name}"
-        self._attr_should_poll = False
         self._attr_device_info = device_info
         self._state = "Sconosciuto"
         self._raw_status = None
-        
-        # Inizializza lo stato iniziale
+
         for area in security._areas:
             if area.get("area_id") == area_id:
                 raw_status = area.get("status")
                 self._raw_status = raw_status
                 self._state = AREA_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
                 break
-        
+
         _LOGGER.debug("Security area %s initial state: %s", name, self._state)
-        
+
     @property
     def icon(self) -> str:
-        """Icona basata sullo stato."""
+        """Icon based on the state."""
         if self._state == "Inserita":
             return "mdi:shield-check"
         if self._state == "Inserimento in corso":
@@ -488,37 +534,43 @@ class SecurityAreaSensor(SensorEntity):
         if "Non pronta" in self._state:
             return "mdi:shield-lock-open"
         return "mdi:shield"
-        
+
     @property
     def native_value(self) -> str:
-        """Restituisce lo stato testuale dell'area."""
+        """Return the textual state of the area."""
         return self._state
-        
+
     @property
     def extra_state_attributes(self) -> dict:
-        """Attributi aggiuntivi."""
+        """Additional attributes."""
         return {
             "raw_status": self._raw_status,
             "area_id": self._area_id,
         }
 
+    def _refresh_from_snapshot(self) -> bool:
+        """Update the state from the last received snapshot, return True if found."""
+        snapshot = getattr(self._security, "_last_snapshot", None)
+        if not snapshot:
+            return False
+        for area in snapshot.get("areas", []):
+            if area.get("area_id") == self._area_id:
+                raw_status = area.get("status")
+                self._raw_status = raw_status
+                self._state = AREA_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
+                return True
+        return False
+
     async def async_added_to_hass(self):
-        """When entity is added to hass."""
-        @callback
-        def handle_update(entity_id: str = None):
-            """Handle update from bus."""
-            if entity_id and entity_id != self._attr_unique_id:
-                return
-            snapshot = getattr(self._security, "_last_snapshot", None)
-            if snapshot:
-                for area in snapshot.get("areas", []):
-                    if area.get("area_id") == self._area_id:
-                        raw_status = area.get("status")
-                        self._raw_status = raw_status
-                        self._state = AREA_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
-                        self.async_write_ha_state()
-                        break
-        
+        """Register for updates."""
         self.async_on_remove(
-            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, handle_update)
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
+
+    @callback
+    def _handle_update(self, entity_id: str = None):
+        """Handle updates."""
+        if entity_id and entity_id != self._attr_unique_id:
+            return
+        if self._refresh_from_snapshot():
+            self.async_write_ha_state()

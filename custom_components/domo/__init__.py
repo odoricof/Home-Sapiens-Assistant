@@ -15,6 +15,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from .const import DOMAIN, PLATFORMS, CONF_PENDING
 from .gateway import DomoGateway
@@ -22,6 +23,7 @@ from .platforms.activations import discover_activations, handle_activation_statu
 from .platforms.analogics import discover_analogics, handle_analogic_status_update
 from .platforms.digital_in import discover_digital_ins, handle_digital_in_status_update
 from .platforms.irrigation import discover_irrigation_zones, handle_irrigation_status_update
+from .platforms.loadsctrl import discover_loadsctrl, handle_loadsctrl_status_update
 from .platforms.sicu import handle_security_status_update, discover_security
 from .platforms.lights import discover_lights, handle_light_status_update 
 from .platforms.thermoregulation import discover_thermostats, handle_thermostat_status_update
@@ -34,6 +36,41 @@ from .services.logger_security_events import SecurityEventsLogger
 from .services.notifications import async_register_notification_services
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# ============================================================
+# ===== MIGRAZIONI =====
+# ============================================================
+
+# TODO: rimuovere questa migrazione (e la chiamata in async_setup_entry)
+# una volta che le installazioni con il typo "burlgar_alarm" saranno
+# tutte aggiornate oltre questa release.
+_BURGLAR_ALARM_TYPO_MAP = {
+    "burlgar_alarm": "burglar_alarm",
+    "burlgar_alarm_inputs": "burglar_alarm_inputs",
+    "burlgar_alarm_areas": "burglar_alarm_areas",
+    "burlgar_alarm_outputs": "burglar_alarm_outputs",
+}
+
+
+def _migrate_burglar_alarm_typo(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Rinomina in-place gli identifier dei device affetti dal typo
+    'burlgar_alarm' -> 'burglar_alarm'. No-op se non trovati."""
+    device_registry = dr.async_get(hass)
+
+    for old_id, new_id in _BURGLAR_ALARM_TYPO_MAP.items():
+        device = device_registry.async_get_device(identifiers={(DOMAIN, old_id)})
+        if device is None:
+            continue
+        device_registry.async_update_device(
+            device.id,
+            new_identifiers={(DOMAIN, new_id)},
+        )
+        _LOGGER.info(
+            "Migrated device identifier '%s' -> '%s' (device_id=%s)",
+            old_id, new_id, device.id,
+        )
+
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -64,6 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     gateway.register_event_callback(handle_scenario_status_update)
     gateway.register_event_callback(handle_timer_status_update)
     gateway.register_event_callback(handle_irrigation_status_update)
+    gateway.register_event_callback(handle_loadsctrl_status_update)
     
     await gateway.start()
     await async_register_notification_services(hass, gateway)
@@ -80,6 +118,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await discover_timers(gateway)
     await discover_tvcc_cameras(gateway)
     await discover_irrigation_zones(gateway)
+    await discover_loadsctrl(gateway)
+    
+    _migrate_burglar_alarm_typo(hass, entry)
+    
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)    
     
     hass.data[DOMAIN][entry.entry_id] = gateway   

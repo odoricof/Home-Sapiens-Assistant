@@ -12,11 +12,12 @@
 
 # Home Sapiens Assistant
 ---
-**Integrazione personalizzata** per **Home Assistant** per interfacciarsi con **Bpt Home Automation / CAME Domotic 3.0** (sistemi basati su server ETI/DOMO) tramite l'interfaccia web di Home Sapiens.
+**Integrazione personalizzata** per **Home Assistant** per interfacciarsi con **Bpt Home Automation / CAME Domotic 3.0 (sistemi basati su server ETI/DOMO)** tramite l'interfaccia web di Home Sapiens.
 
 ---
 
 ## Funzionalità
+### (Per maggiori dettagli consultare il file [Changelog](https://github.com/odoricof/Home-Sapiens-Assistant/blob/main/Changelog.it.md))
 
 Questa integrazione consente a Home Assistant di monitorare e controllare un sistema Bpt Home Automation / CAME Domotic.
 
@@ -41,6 +42,8 @@ Attualmente supportati:
    - Silenziamento sirene
    - Cancellazione memoria eventi
 - Luci
+- Controllo carichi
+   - Replica integrale di tutte le funzioni esposte in lettura e scrittura
 - Aperture
 - Scenari
 - Programmazione oraria
@@ -109,11 +112,11 @@ Per garantire una visualizzazione corretta e coerente degli scenari all'interno 
 
 #### Scenari e aree associate:
 
-| Scenario               | Aree associate                       |
-|------------------------|--------------------------------------|
+| Scenario               | Aree associate                            |
+|------------------------|-------------------------------------------|
 | **"Inserito assente"** | Area Giorno + Area Notte + Area Perimetro |
-| **"Inserito casa"**    | Area Perimetro                       |
-| **"Inserito notte"**   | Area Giorno + Area Perimetro         |
+| **"Inserito casa"**    | Area Perimetro                            |
+| **"Inserito notte"**   | Area Giorno + Area Perimetro              |
 
 In questo esempio, ogni scenario presenta una combinazione unica di aree, consentendo al pannello di Home Assistant di distinguerli correttamente e aggiornare l'interfaccia utente di conseguenza.
 

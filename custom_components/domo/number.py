@@ -1,9 +1,10 @@
 """
 domo/number.py
 
-Entities fed by this file:
+Entities fed by:
 - platforms/thermoregulation.py
 - platforms/irrigation.py
+- platforms/loadsctrl.py
 
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
@@ -12,21 +13,21 @@ License: MIT
 This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
 Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
+
+status: passed
 """
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
-from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfTemperature, UnitOfTime
+from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfPower, UnitOfTemperature, UnitOfTime
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN, SIGNAL_DISCOVERY_NEW, SIGNAL_UPDATE_ENTITY
-from .platforms.thermoregulation import DomoThermostat, get_all_thermostats
 from .platforms.irrigation import (
     DomoIrrigationZone,
     get_all_irrigation_zones,
@@ -36,11 +37,18 @@ from .platforms.irrigation import (
     async_set_sprinkler_active,
     async_set_sprinkler_duty,
 )
+from .platforms.loadsctrl import (
+    DomoLoadCtrlMeter,
+    get_all_loadsctrl_meters,
+    async_set_loadsctrl_max_power,
+    async_set_loadsctrl_hysteresis,
+)
+from .platforms.thermoregulation import DomoThermostat, get_all_thermostats
 
 _LOGGER = logging.getLogger(__name__)
 
-# attr_key -> (nome entità, icona, min, max, step, mode)
-_PROFILE_ATTRS: dict[str, tuple[Optional[str], Optional[str], float, float, float, str]] = {
+
+_PROFILE_ATTRS: dict[str, tuple[str | None, str | None, float, float, float, str]] = {
     "t1": ("T1", None, 5.0, 35.0, 0.1, NumberMode.BOX),
     "t2": ("T2", None, 5.0, 35.0, 0.1, NumberMode.BOX),
     "t3": ("T3", None, 5.0, 35.0, 0.1, NumberMode.BOX),
@@ -48,12 +56,16 @@ _PROFILE_ATTRS: dict[str, tuple[Optional[str], Optional[str], float, float, floa
 }
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
-    """Setup number platform per i profili termici dei termostati, per la
-    percentuale stagionale dei settori di irrigazione e per il tempo massimo
-    / ciclo di lavoro dei singoli irrigatori."""
+# ============================================================
+# ===== SETUP ENTRY =====
+# ============================================================
 
-    # ----- TERMOSTATI (profili termici) -----
+async def async_setup_entry(hass, entry, async_add_entities):
+    """Set up the number platform for thermostat thermal profiles, irrigation
+    zone seasonal percentage, and sprinkler max irrigation time / duty
+    cycle."""
+
+    # --- Thermostats ---
     thermostats = get_all_thermostats()
 
     if not thermostats:
@@ -72,7 +84,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         async_add_entities(entities, update_before_add=True)
         _LOGGER.info("Added %d number entities for thermal profiles", len(entities))
 
-    # ----- IRRIGAZIONE (percentuale stagionale) -----
+    # --- Irrigation Zones ---
     irrigation_added_ids: set[int] = set()
 
     def _add_irrigation_number(zone: DomoIrrigationZone):
@@ -99,7 +111,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         )
     )
 
-    # ----- IRRIGATORI (tempo massimo e duty cycle) -----
+    # --- Sprinklers ---
     sprinkler_added_ids: set[str] = set()
 
     def _add_sprinkler_numbers(sprinkler: DomoSprinkler):
@@ -129,9 +141,43 @@ async def async_setup_entry(hass, entry, async_add_entities):
         )
     )
 
+    # --- Load Control ---
+    loadsctrl_added_ids: set[int] = set()
+
+    def _add_loadsctrl_numbers(meter: DomoLoadCtrlMeter):
+        if meter.meter_id in loadsctrl_added_ids:
+            return
+        loadsctrl_added_ids.add(meter.meter_id)
+        entities = [
+            DomoLoadCtrlMaxPowerNumber(meter),
+            DomoLoadCtrlHysteresisNumber(meter),
+        ]
+        async_add_entities(entities)
+        _LOGGER.info(
+            "Added %d number entities for loadsctrl meter id=%s (%s)",
+            len(entities), meter.meter_id, meter.name,
+        )
+
+    for meter in get_all_loadsctrl_meters():
+        _add_loadsctrl_numbers(meter)
+
+    @callback
+    def _async_new_loadsctrl_meter(meter: DomoLoadCtrlMeter):
+        _add_loadsctrl_numbers(meter)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, SIGNAL_DISCOVERY_NEW.format("loadsctrl_number"), _async_new_loadsctrl_meter
+        )
+    )
+
+
+# ============================================================
+# ===== THERMAL PROFILES =====
+# ============================================================
 
 class DomoThermostatProfileNumber(NumberEntity):
-    """Valore di profilo termico (T1/T2/T3/Antigelo) di un termostato"""
+    """Thermal profile value (T1/T2/T3/Antifreeze) of a thermostat."""
 
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.CONFIG
@@ -150,13 +196,12 @@ class DomoThermostatProfileNumber(NumberEntity):
         self._attr_native_max_value = max_value
         self._attr_native_step = step
         self._attr_unique_id = f"domo_thermostat_{thermostat.act_id}_{attr_key}"
-        # Si aggancia allo stesso device della climate entity (sub-device del termostato)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_climate_{thermostat.unique_id}")},
         )
 
     @property
-    def native_value(self) -> Optional[float]:
+    def native_value(self) -> float | None:
         return getattr(self._thermostat, self._attr_key)
 
     async def async_set_native_value(self, value: float) -> None:
@@ -175,7 +220,7 @@ class DomoThermostatProfileNumber(NumberEntity):
             )
 
     def _enforce_profile_order(self, value: float) -> float:
-        """Corregge value per garantire t1 < t2 < t3, replicando il clamp dell'app ufficiale."""
+        """Adjusts value to enforce t1 < t2 < t3, replicating the official app's clamping."""
         t1 = self._thermostat.t1
         t2 = self._thermostat.t2
         t3 = self._thermostat.t3
@@ -197,11 +242,7 @@ class DomoThermostatProfileNumber(NumberEntity):
 
     async def async_added_to_hass(self):
         self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_UPDATE_ENTITY,
-                self._handle_update,
-            )
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
 
     @callback
@@ -211,7 +252,7 @@ class DomoThermostatProfileNumber(NumberEntity):
 
 
 class DomoThermostatDiffNumber(NumberEntity):
-    """Differenziale termico (usato in modalità DIFF) di un termostato."""
+    """Thermal differential (used in DIFF mode) of a thermostat."""
 
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.CONFIG
@@ -232,7 +273,7 @@ class DomoThermostatDiffNumber(NumberEntity):
         )
 
     @property
-    def native_value(self) -> Optional[float]:
+    def native_value(self) -> float | None:
         return self._thermostat.diff_t_dec
 
     async def async_set_native_value(self, value: float) -> None:
@@ -248,11 +289,7 @@ class DomoThermostatDiffNumber(NumberEntity):
 
     async def async_added_to_hass(self):
         self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                SIGNAL_UPDATE_ENTITY,
-                self._handle_update,
-            )
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
 
     @callback
@@ -262,11 +299,11 @@ class DomoThermostatDiffNumber(NumberEntity):
 
 
 # ============================================================
-# DEVICE INFO CONDIVISO PER I SETTORI DI IRRIGAZIONE
+# ===== IRRIGATION ZONES =====
 # ============================================================
+
 def _irrigation_zone_device_info(zone: DomoIrrigationZone, entry_id: str) -> DeviceInfo:
-    """DeviceInfo del device 'settore di irrigazione', condiviso da tutte le
-    entita' agganciate alla zona (number, switch, time, ...)."""
+    """DeviceInfo of the 'irrigation zone' device shared by the zone."""
     return DeviceInfo(
         identifiers={(DOMAIN, f"{entry_id}_irrigation_{zone.zone_id}")},
         name=zone.name,
@@ -275,13 +312,8 @@ def _irrigation_zone_device_info(zone: DomoIrrigationZone, entry_id: str) -> Dev
     )
 
 
-# ============================================================
-# ENTITA' NUMBER PER LA DURATA (PERC) DEI SETTORI DI IRRIGAZIONE
-# ============================================================
 class DomoIrrigationPercNumber(NumberEntity):
-    """Entita' 'number' per la percentuale stagionale (% STAGIONALE) di un settore
-    di irrigazione. 100 = durata nominale; range 50-150 confermato dalla UI nativa.
-    """
+    """Seasonal percentage (% STAGIONALE) of an irrigation zone."""
 
     _attr_should_poll = False
     _attr_icon = "mdi:water-percent"
@@ -295,11 +327,10 @@ class DomoIrrigationPercNumber(NumberEntity):
         self._zone = zone
         self._attr_unique_id = f"domo_irrigation_{zone.zone_id}_perc"
         self._attr_name = "% STAGIONALE"
-        # Dispositivo condiviso con le altre entita' dello stesso settore
         self._attr_device_info = _irrigation_zone_device_info(zone, entry_id)
 
     @property
-    def native_value(self) -> Optional[float]:
+    def native_value(self) -> float | None:
         return float(self._zone.perc)
 
     async def async_set_native_value(self, value: float) -> None:
@@ -324,21 +355,18 @@ class DomoIrrigationPercNumber(NumberEntity):
 
 
 # ============================================================
-# ENTITA' NUMBER PER GLI IRRIGATORI (tempo massimo / ciclo di lavoro)
+# ===== SPRINKLERS =====
 # ============================================================
+
 def _sprinkler_device_info(sprinkler: DomoSprinkler, entry_id: str) -> DeviceInfo:
-    """DeviceInfo del device 'settore di irrigazione' a cui appartiene lo
-    sprinkler: le entita' irrigatore condividono lo stesso device della zona
-    (nessun sub-device separato), distinte tra loro solo tramite il nome."""
+    """DeviceInfo of the 'irrigation zone' device the sprinkler belongs to."""
     return DeviceInfo(
         identifiers={(DOMAIN, f"{entry_id}_irrigation_{sprinkler.zone_id}")},
     )
 
 
 class DomoIrrigationActiveNumber(NumberEntity):
-    """Tempo massimo di irrigazione del singolo irrigatore.
-    Sotto 60 min mostra minuti interi (1-59), da 60 min in su mostra ore
-    con un decimo di precisione (1,0 - 6,0)."""
+    """Maximum irrigation time of the single sprinkler."""
 
     _attr_should_poll = False
     _attr_icon = "mdi:timer-outline"
@@ -373,7 +401,7 @@ class DomoIrrigationActiveNumber(NumberEntity):
         return 6.0 if self._use_hours else 59
 
     @property
-    def native_value(self) -> Optional[float]:
+    def native_value(self) -> float | None:
         active = self._sprinkler.active
         if active is None:
             return None
@@ -382,13 +410,11 @@ class DomoIrrigationActiveNumber(NumberEntity):
         return round(active / 60)
 
     async def async_set_native_value(self, value: float) -> None:
-        use_hours = self._use_hours  # modalita' corrente (prima dell'aggiornamento)
+        use_hours = self._use_hours
 
         if use_hours and value <= self.native_min_value:
-            # Slider spinto al minimo della scala ore -> passa a minuti (59)
             seconds = 59 * 60
         elif not use_hours and value >= self.native_max_value:
-            # Slider spinto al massimo della scala minuti -> passa a ore (1,0)
             seconds = 3600
         elif use_hours:
             seconds = int(round(value * 3600))
@@ -414,7 +440,7 @@ class DomoIrrigationActiveNumber(NumberEntity):
 
 
 class DomoIrrigationDutyNumber(NumberEntity):
-    """Ciclo di lavoro (duty cycle) del singolo irrigatore."""
+    """Duty cycle of the single sprinkler."""
 
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.CONFIG
@@ -432,7 +458,7 @@ class DomoIrrigationDutyNumber(NumberEntity):
         self._attr_device_info = _sprinkler_device_info(sprinkler, entry_id)
 
     @property
-    def native_value(self) -> Optional[float]:
+    def native_value(self) -> float | None:
         return self._sprinkler.duty
 
     async def async_set_native_value(self, value: float) -> None:
@@ -451,4 +477,104 @@ class DomoIrrigationDutyNumber(NumberEntity):
     @callback
     def _handle_update(self, entity_id: str = None):
         if entity_id is None or entity_id == self._sprinkler.unique_id:
+            self.async_write_ha_state()
+
+
+# ============================================================
+# ===== LOAD CONTROL =====
+# ============================================================
+
+def _loadsctrl_meter_device_info(meter: DomoLoadCtrlMeter) -> DeviceInfo:
+    """DeviceInfo of the load control manager."""
+    return DeviceInfo(
+        identifiers={(DOMAIN, meter.unique_id)},
+        name=meter.name,
+        manufacturer="Home Sapiens Assistant",
+        model="Eti/Domo",
+    )
+
+
+class DomoLoadCtrlMaxPowerNumber(NumberEntity):
+    """Full scale (max_power) of the load control manager, in kW."""
+
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_device_class = NumberDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_mode = NumberMode.BOX
+    _attr_native_min_value = 0.4
+    _attr_native_max_value = 10.0
+    _attr_native_step = 0.2
+    _attr_icon = "mdi:gauge-full"
+    _attr_name = "Fondo scala"
+
+    def __init__(self, meter: DomoLoadCtrlMeter):
+        self._meter = meter
+        self._attr_unique_id = f"{meter.unique_id}_max_power"
+        self._attr_device_info = _loadsctrl_meter_device_info(meter)
+
+    @property
+    def native_value(self) -> float | None:
+        return self._meter.max_power / 1000.0
+
+    async def async_set_native_value(self, value: float) -> None:
+        watts = int(round(value * 1000))
+        try:
+            await async_set_loadsctrl_max_power(
+                self._meter.meter_id, watts, self._meter.gateway
+            )
+        except Exception as err:
+            raise HomeAssistantError(f"Errore invio loadsctrl_meter_set_req (max_power): {err}") from err
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, entity_id: str = None):
+        if entity_id is None or entity_id == self._meter.unique_id:
+            self.async_write_ha_state()
+
+
+class DomoLoadCtrlHysteresisNumber(NumberEntity):
+    """Hysteresis of the load control manager, in kW."""
+
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_device_class = NumberDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_mode = NumberMode.BOX
+    _attr_native_min_value = 0.2
+    _attr_native_max_value = 2.0
+    _attr_native_step = 0.2
+    _attr_icon = "mdi:delta"
+    _attr_name = "Isteresi"
+
+    def __init__(self, meter: DomoLoadCtrlMeter):
+        self._meter = meter
+        self._attr_unique_id = f"{meter.unique_id}_hysteresis"
+        self._attr_device_info = _loadsctrl_meter_device_info(meter)
+
+    @property
+    def native_value(self) -> float | None:
+        return self._meter.hysteresis / 1000.0
+
+    async def async_set_native_value(self, value: float) -> None:
+        watts = int(round(value * 1000))
+        try:
+            await async_set_loadsctrl_hysteresis(
+                self._meter.meter_id, watts, self._meter.gateway
+            )
+        except Exception as err:
+            raise HomeAssistantError(f"Errore invio loadsctrl_meter_set_req (hysteresis): {err}") from err
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, entity_id: str = None):
+        if entity_id is None or entity_id == self._meter.unique_id:
             self.async_write_ha_state()

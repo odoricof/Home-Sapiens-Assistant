@@ -1,4 +1,4 @@
-### 🌐 Lingua / Language
+### 🌐 Language / Lingua
 - [English](Changelog.md) | [Italiano](Changelog.it.md)
 
 # Changelog
@@ -9,11 +9,12 @@ All notable changes to this project will be documented in this file.
 
 ## [1.0.0] - 2026-03-12
 
-### Added
+### 🚀 Features
+
 - Initial public release of the **ETI/DOMO integration for Home Assistant**
 - Gateway of communication with ETI/Domo systems through the **Home Sapiens web interface**
 
-### Supported platforms
+#### Supported platforms
 - Activations
 - Analogic inputs
 - Climate control
@@ -25,35 +26,40 @@ All notable changes to this project will be documented in this file.
 
 ## [1.1.0] - 2026-04-04
 
-### Added
-### Supported platforms
+### 🚀 Features
+
+#### Supported platforms
 - TVCC
 - Openings
 - Digital inputs
 
 ## [1.1.1] - 2026-04-09
 
-- Minor improvements
+### 🐛 Bug Fixes
 
 ## [1.2.0] - 2026-04-12
 
-### Added
+### 🚀 Features
+
 - Security Areas
 - Security Inputs
 - security Outputs
 
 ## [1.3.0] - 2026-04-12
 
-### Added
+### 🚀 Features
+
 - Offline/Online status notifications for the ETI/DOMO server
 
 ## [1.3.1] - 2026-06-21
 
-- Bugfix: correct thermostat summer mode
+### 🐛 Bug Fixes
+
+- Correct thermostat summer mode
 
 ## [1.4.0] - 2026-07-11
 
-### Added
+### 🚀 Features
 
 #### Automatic Thermal Profile added fature
 
@@ -70,17 +76,19 @@ All notable changes to this project will be documented in this file.
 - **Assisted interaction**: if the user moves the slider while the thermostat is in AUTO or OFF mode (OFF only in winter), the thermostat automatically switches to **manual** mode and immediately applies the requested temperature, with a single call to the gateway (mode + set_point in a single command).
 - New `antifreeze` (°C) attribute exposed on the entity.
 
-### Fixed 
+### 🐛 Bug Fixes 
 
 - **Merge pull request #4 from brokkolo/patch-1**: Fix false 0°C history dips: climate entities defaulted temp_dec/set_point to 0/200 instead of None
 
 ## [1.5.0] - 2026-07-17
 
-### Alarm Panel
+### 🚀 Features
+
+#### Alarm Panel
 
 Handling of arming when one or more areas of the requested scenario are not ready (open inputs), to prevent the alarm from triggering immediately.
 
-#### Implemented Behavior
+##### Implemented Behavior
 
 When the user requests arming (arm_home / arm_night / arm_away) and one or more areas involved in the scenario are not ready:
 
@@ -91,27 +99,25 @@ When the user requests arming (arm_home / arm_night / arm_away) and one or more 
 5. If 30s expire and areas are still not ready → arming **is still executed**, as requested by the user who was warned.
 6. If the user sends disarm during the wait → the arming request is canceled, no command is ever sent to the control panel. The persistent notification is dismissed; the push notification remains on the phone until manually cleared by the user (explicit choice, no automatic recall).
 
-#### Push Notifications for Alarm Panel State Changes
+##### Push Notifications for Alarm Panel State Changes
 
 1. Added push notification system that informs the user of every state change of the control panel.
-
-### Added
 
 #### Timer management (Scheduler platform)
 
 ![Scheduler](images/scheduler.png)
 
-- [Feature] expose CAME activation (relay) timers/schedules as entity attributes
+1. Expose CAME activation (relay) timers/schedules as entity attributes
  #2
 
-### Fixed 
+### 🐛 Bug Fixes
 
 - [Bug] alarm_control_panel state stuck at "unknown" after restart — central status never queried during discovery
  #3
  
 ## [1.6.0] - 2026-07-26
 
-### Added
+### 🚀 Features
 
 #### Irrigation Platform
 
@@ -176,7 +182,7 @@ The following parameters are now exposed for both reading and writing:
 - Temporary progress/completion status shown directly by the selector
 - Thermostats missing from the installation are skipped with a warning without interrupting the restore process
 
-### Minor Fix
+### 🐛 Bug Fixes
 
 - Added anti-glitch filtering during ETI/DOMO bus programming to discard invalid `temp_dec` values (outside 3–35°C) and `hygro` values (outside 0–100%), preventing invalid temperature and humidity readings from propagating to Climate entities.
 - Alarm panel now exposes only the scenarios actually configured in the installation. **Away** is always available, while **Night** and **Home** are created only when the corresponding scenarios exist and contain configured areas.
@@ -185,12 +191,12 @@ The following parameters are now exposed for both reading and writing:
 
 ## [1.7.0] - 2026-08-02
 
-### New distribution
+### 🎉 Distribution News
 
-- 🎉 the integration has been added to the official HACS catalog.<br>
+- The integration has been added to the official HACS catalog.<br>
 From now on it can be installed with a simple search, without any additional configuration needed.
 
-### Added
+### 🚀 Features
 
 ![alarm](images/alarm.png)
 
@@ -198,6 +204,23 @@ From now on it can be installed with a simple search, without any additional con
 
 - Alarm vent Memory Reset: New command to clear the alarm event memory recorded by the control panel, directly from Home Assistant, by entering your code into a dedicated text entity.
 
-### Minor Fix
+### 🐛 Bug Fixes
 
-- SecurityEventsLogger now uses a portable log path via hass.config.path() instead of a hardcoded /config path, and file I/O (directory creation, log writes) now runs in an executor to avoid blocking the event loop. 
+- SecurityEventsLogger now uses a portable log path via hass.config.path() instead of a hardcoded /config path, and file I/O (directory creation, log writes) now runs in an executor to avoid blocking the event loop.
+
+## [1.8.0] - 2026-08-18
+
+### 🚀 Features
+
+#### Climate - Thermal profile copy/paste - Jolly profile, Plant off mode
+
+- Added "Copy thermal profile to" select for each thermostat: allows copying the currently selected day's profile to another specific day or to the entire week.
+- Jolly profile management now exposed as a preset mode on the climate card
+- When the system is off, the climate card no longer shows unusable buttons.
+
+#### New Load Control platform
+
+- Complete read/write management of controlled loads, exposing entities: load enable, weekly energy profile, full scale, hysteresis, power sensor.
+
+![loads](images/loads1.png)
+![loads](images/loads2.png)

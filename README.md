@@ -17,7 +17,7 @@ Custom integration for **Home Assistant** to interface with **Bpt Home Automatio
 ---
 
 ## Features
-
+### (For more details, see the [Changelog](https://github.com/odoricof/Home-Sapiens-Assistant/blob/main/Changelog.md))
 This integration allows Home Assistant to monitor and control a Bpt Home Automation / CAME Domotic system.
 
 Currently supported:
@@ -42,6 +42,8 @@ Currently supported:
    - Silencing
    - Reset event memory
 - Lights
+- Loads control
+   - Full support for all read and write functions
 - Openings
 - Scenes
 - Schedule
@@ -118,6 +120,9 @@ To ensure proper and consistent visualization of scenarios within the Home Assis
 In this example, each scenario features a unique combination of areas, enabling the Home Assistant panel to distinguish between them correctly and update the user interface accordingly.
 
 > **Important:** When configuring your alarm control panel, ensure that each scenario is assigned a **distinct set of areas** different from all the others.
+
+---
+
 ## Requirements
 
 - A working **Bpt Home Sapiens Domotic system / CameDomotic 3.0 system**

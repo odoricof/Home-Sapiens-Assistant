@@ -40,7 +40,6 @@ class DomoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is None:
-            # Mostra il form con le istruzioni
             return self.async_show_form(
                 step_id="user",
                 data_schema=STEP_USER_DATA_SCHEMA,
@@ -48,11 +47,9 @@ class DomoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 description_placeholders={},
             )
 
-        # Protezione duplicati
         await self.async_set_unique_id(user_input[CONF_HOST])
         self._abort_if_unique_id_configured()
         
-        # Test connessione
         gateway = DomoGateway(
             self.hass,
             host=user_input[CONF_HOST],
@@ -74,7 +71,6 @@ class DomoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         finally:
             await gateway.stop()
 
-        # Mostra di nuovo il form con l'errore
         return self.async_show_form(
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
@@ -102,7 +98,6 @@ class DomoOptionsFlow(config_entries.OptionsFlow):
         errors = {}
 
         if user_input is not None:
-            # Test connessione con nuove credenziali
             gateway = DomoGateway(
                 self.hass,
                 host=user_input[CONF_HOST],
@@ -112,7 +107,6 @@ class DomoOptionsFlow(config_entries.OptionsFlow):
             
             try:
                 if await gateway.test_connection():
-                    # Aggiorna la entry esistente
                     self.hass.config_entries.async_update_entry(
                         self._config_entry,
                         data=user_input
@@ -126,7 +120,6 @@ class DomoOptionsFlow(config_entries.OptionsFlow):
             finally:
                 await gateway.stop()
 
-        # Pre-popola con i valori esistenti
         current_host = self._config_entry.data.get(CONF_HOST)
         current_username = self._config_entry.data.get(CONF_USERNAME, DEFAULT_USERNAME)
         current_password = self._config_entry.data.get(CONF_PASSWORD, DEFAULT_PASSWORD)

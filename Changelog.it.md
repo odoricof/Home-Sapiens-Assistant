@@ -9,11 +9,12 @@ Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
 ## [1.0.0] - 2026-03-12
 
-### Aggiunto
+### 🚀 Features
+
 - Rilascio pubblico iniziale dell'**integrazione ETI/DOMO per Home Assistant**
 - Gateway di comunicazione con i sistemi ETI/Domo tramite l'**interfaccia web Home Sapiens**
 
-### Piattaforme supportate
+#### Piattaforme supportate
 - Attuazioni
 - Ingressi analogici
 - Controllo climatico
@@ -25,35 +26,40 @@ Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
 ## [1.1.0] - 2026-04-04
 
-### Aggiunto
-### Piattaforme supportate
+### 🚀 Features
+
+#### Piattaforme supportate
 - TVCC
 - Aperture
 - Ingressi digitali
 
 ## [1.1.1] - 2026-04-09
 
-- Miglioramenti minori
+### 🐛 Bug Fixes
 
 ## [1.2.0] - 2026-04-12
 
-### Aggiunto
+### 🚀 Features
+
 - Aree di sicurezza
 - Ingressi di sicurezza
 - Uscite di sicurezza
 
 ## [1.3.0] - 2026-04-12
 
-### Aggiunto
+### 🚀 Features
+
 - Notifiche di stato Offline/Online per il server ETI/DOMO
 
 ## [1.3.1] - 2026-06-21
 
-- Bugfix: corretta la modalità estiva del termostato
+### 🐛 Bug Fixes
+
+- Corretta la modalità estiva del termostato
 
 ## [1.4.0] - 2026-07-11
 
-### Aggiunto
+### 🚀 Features
 
 #### Esposizione profili termici della modalità automatico
 
@@ -70,17 +76,19 @@ Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 - **Interazione assistita**: se l'utente muove lo slider mentre il termostato è in modalità AUTO o OFF (OFF solo in inverno), il termostato passa automaticamente in modalità **manuale** e applica immediatamente la temperatura richiesta, con una singola chiamata al gateway (mode + set_point in un unico comando).
 - Nuovo attributo `antifreeze` (°C) esposto sull'entità.
 
-### Correzione
+### 🐛 Bug Fixes
 
 - **Merge pull request #4 da brokkolo/patch-1**: Corretti i falsi cali a 0°C nella cronologia: le entità climate impostavano di default temp_dec/set_point a 0/200 invece di None
 
 ## [1.5.0] - 2026-07-17
 
-### Centrale Antintrusione
+### 🚀 Features
+
+#### Centrale Antintrusione
 
 Gestione dell'inserimento quando una o più aree dello scenario richiesto non sono pronte (ingressi aperti), per evitare che l'allarme scatti immediatamente.
 
-#### Comportamento Implementato
+##### Comportamento Implementato
 
 Quando l'utente richiede l'inserimento (arm_home / arm_night / arm_away) e una o più aree coinvolte nello scenario non sono pronte:
 
@@ -91,23 +99,25 @@ Quando l'utente richiede l'inserimento (arm_home / arm_night / arm_away) e una o
 5. Se i 30s scadono e le aree non sono ancora pronte → l'inserimento **viene comunque eseguito**, come richiesto dall'utente che era stato avvisato.
 6. Se l'utente invia il disinserimento durante l'attesa → la richiesta di inserimento viene annullata, nessun comando viene mai inviato alla centrale. La notifica persistente viene rimossa; la notifica push rimane sul telefono finché non viene cancellata manualmente dall'utente (scelta esplicita, nessun richiamo automatico).
 
-#### Notifiche Push per i Cambi di Stato della Centrale
+##### Notifiche Push per i Cambi di Stato della Centrale
 
 1. Aggiunto sistema di notifiche push che informa l'utente di ogni cambio di stato della centrale.
 
-### Aggiunto
+#### Gestione timers
+
+![Scheduler](images/scheduler.png)
 
 1. Gestione timer (piattaforma Scheduler)
-- [Feature] esposizione dei timer/programmazioni delle attivazioni CAME (relè) come attributi entità
- #2
+- Eesposizione dei timer/programmazioni delle attivazioni (relè) come attributi entità #2
 
-### Corretto
+### 🐛 Bug Fixes
 
 - [Bug] stato di alarm_control_panel bloccato su "unknown" dopo il riavvio — stato della centrale mai interrogato durante il discovery
  #3
+ 
 ## [1.6.0] - 2026-07-26
 
-### Aggiunto
+### 🚀 Features
 
 #### Piattaforma Irrigazione
 
@@ -172,7 +182,7 @@ I seguenti parametri sono ora esposti sia in lettura che in scrittura:
 - Stato di avanzamento/completamento temporaneo mostrato direttamente dal selettore
 - I termostati mancanti nell'impianto vengono saltati con un avviso, senza interrompere il processo di ripristino
 
-### Fix Minori
+### 🐛 Bug Fixes
 
 - Aggiunto filtraggio anti-glitch durante la programmazione del bus ETI/DOMO per scartare valori `temp_dec` non validi (fuori dal range 3–35°C) e valori `hygro` non validi (fuori dal range 0–100%), evitando che letture di temperatura e umidità non valide si propaghino alle entità Climate.
 - La centrale allarme ora espone solo gli scenari effettivamente configurati nell'impianto. **Away** è sempre disponibile, mentre **Night** e **Home** vengono create solo quando i rispettivi scenari esistono e contengono aree configurate.
@@ -181,12 +191,12 @@ I seguenti parametri sono ora esposti sia in lettura che in scrittura:
 
 ## [1.7.0] - 2026-08-02
 
-### Novità distribuzione
+### 🎉 Novità distribuzione
 
-- 🎉 L'integrazione è stata inserita nel catalogo ufficiale di HACS.<br>
+- L'integrazione è stata inserita nel catalogo ufficiale di HACS.<br>
 D'ora in poi è installabile con una semplice ricerca, senza configurazioni aggiuntive.
 
-### Aggiunto
+### 🚀 Features
 
 ![alarm](images/alarm.png)
 
@@ -194,6 +204,23 @@ D'ora in poi è installabile con una semplice ricerca, senza configurazioni aggi
 
 - Allarme, cancellazione memoria eventi: Nuovo comando per azzerare la memoria degli eventi di allarme registrati dalla centrale, direttamente da Home Assistant, digitando il proprio codice su un'apposita entità testuale.
 
-### Fix Minori
+### 🐛 Bug Fixes
 
 - SecurityEventsLogger ora utilizza un percorso di log portabile tramite hass.config.path() invece di un percorso /config fisso, e le operazioni di I/O su file (creazione directory, scrittura log) vengono eseguite in un executor per non bloccare il event loop.
+
+## [1.8.0] - 2026-08-18
+
+### 🚀 Features
+
+#### Climate - Copia/incolla profili termici, Profilo Jolly, modalità impianto spento
+
+- Aggiunto select "Copia profilo termico su" per ogni termostato: permette di copiare il profilo del giorno correntemente selezionato su un altro giorno specifico o su tutta la settimana.
+- Gestione del profilo Jolly esposto come preset mode sulla climate card
+- Quando l'impianto è spento, la card climate non mostra pulsanti inutilizzabili.
+
+#### Nuova piattaforma Controllo Carichi
+
+- Gestione completa in lettura/scrittura dei carichi controllati, esposte entità: abilitazione carico, profilo energetico settimanale, fondo scala, isteresi, sensore potenza.
+
+![loads](images/loads1.png)
+![loads](images/loads2.png)

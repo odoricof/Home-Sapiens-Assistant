@@ -1,4 +1,11 @@
-"""domo/platforms/sicu.py
+"""
+platforms/sicu.py
+
+Entities fed by this file:
+- domo/alarm_control_panel.py : Alarm panel entity (arm/disarm, scenarios, central status)
+- domo/binary_sensor.py       : Security outputs
+- domo/sensor.py              : Security areas, security inputs
+- domo/text.py                : Silencing, reset event memory
 
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
@@ -7,22 +14,33 @@ License: MIT
 This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
 Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
+
+status: passed
 """
 
 from __future__ import annotations
-from homeassistant.helpers.dispatcher import async_dispatcher_send
-from ..const import SIGNAL_UPDATE_ENTITY
+
 import logging
 import threading
-from typing import Dict, Any, Optional
+from typing import Any
+
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+from ..const import SIGNAL_UPDATE_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# ============================================================
+# ===== UTILITY =====
+# ============================================================
 
 _SCENARIO_ROLE_KEYWORDS: dict[str, list[str]] = {
     "armed_away": ["esco", "fuori casa"],
     "armed_night": ["notte", "letto"],
     "armed_home": ["resto", "in casa"],
 }
+
 
 def _match_scenario_role(name: str | None) -> str | None:
     """Deduce il ruolo (armed_away/night/home) dal nome scenario della centrale."""
@@ -34,7 +52,7 @@ def _match_scenario_role(name: str | None) -> str | None:
 
 
 # ============================================================
-# DECODIFICA CODICI DI STATO PROTOCOLLO (centrale / aree / ingressi)
+# ===== DECODIFICA STATI =====
 # ============================================================
 
 CENTRAL_STATUS_MAP = {
@@ -97,70 +115,65 @@ AREA_NOT_READY_STATUS = {32, 33, 48, 96}
 
 
 TYPE_SECURITY_CENTRAL = -10
-_SECURITY_DEVICE: Optional["SecurityCentral"] = None
+_SECURITY_DEVICE: "SecurityCentral | None" = None
+
 
 # ============================================================
-# INTERROGA PRESENZA CENTRALI
+# ===== SCOPERTA CENTRALE =====
 # ============================================================
 
 async def discover_security(gateway):
     """Scopri le centrali di sicurezza disponibili."""
     global _SECURITY_DEVICE
-    
+
     if _SECURITY_DEVICE is not None:
         return _SECURITY_DEVICE
-    
-    _LOGGER.info("SECURITY starting discovery")
-    
+
+    _LOGGER.info("SECURITY avvio ricerca centrale")
+
     try:
-        # 1. Feature list per vedere se 'sicu' è supportato
         feat_resp = await gateway.tx_command(
             {"cmd_name": "feature_list_req"},
             resp_command=None
         )
-        
+
         if not feat_resp:
-            _LOGGER.debug("SECURITY discovery: no feature list response")
+            _LOGGER.debug("SECURITY ricerca: nessuna risposta alla feature list")
             return None
-            
+
         features = feat_resp.get("list", [])
         if "sicu" not in features:
-            _LOGGER.debug("SECURITY discovery: sicu not supported")
+            _LOGGER.debug("SECURITY ricerca: feature sicu non supportata")
             return None
-            
-        _LOGGER.info("SECURITY: sicu feature supported")
-        
-        # 2. Richiedi lista aree (central_id=0)
+
+        _LOGGER.info("SECURITY feature sicu supportata")
+
         areas_resp = await gateway.tx_command({
             "appl_msg_type": "sicu",
             "cmd_name": "sicu_areas_list_req",
             "central_id": 0
         }, resp_command=None)
-        
-        # 3. Richiedi lista ingressi (central_id=0)
+
         inputs_resp = await gateway.tx_command({
             "appl_msg_type": "sicu",
             "cmd_name": "sicu_inputs_list_req",
             "central_id": 0
         }, resp_command=None)
-        
-        # 4. Richiedi lista scenari (central_id=0)
+
         scenarios_resp = await gateway.tx_command({
             "appl_msg_type": "sicu",
             "cmd_name": "sicu_scenarios_list_req",
             "central_id": 0
         }, resp_command=None)
-        
-        # 4.5. Richiedi lista uscite (central_id=0)
-        _LOGGER.debug("SECURITY requesting outputs list for central_id=0")
+
+        _LOGGER.debug("SECURITY richiesta lista uscite per central_id=0")
         outputs_resp = await gateway.tx_command({
             "appl_msg_type": "sicu",
             "cmd_name": "sicu_outputs_list_req",
             "central_id": 0
-        }, resp_command=None)        
-        _LOGGER.debug("SECURITY outputs response: %s", outputs_resp)    
-        
-        # 5. Crea la centrale con i dati raccolti
+        }, resp_command=None)
+        _LOGGER.debug("SECURITY risposta uscite: %s", outputs_resp)
+
         central_info = {
             "central_id": 0,
             "name": "Proxinet",
@@ -168,14 +181,11 @@ async def discover_security(gateway):
             "inputs_num": len(inputs_resp.get("array", [])) if inputs_resp else 0,
             "scenarios_num": len(scenarios_resp.get("array", [])) if scenarios_resp else 0
         }
-        
-        _LOGGER.info(
-            "SECURITY central discovered | central_id=0 name=Proxinet"
-        )
-        
+
+        _LOGGER.info("SECURITY centrale scoperta | central_id=0 name=Proxinet")
+
         _SECURITY_DEVICE = SecurityCentral(gateway, central_info)
-        
-        # Popola aree e ingressi con i dati già ricevuti
+
         if areas_resp:
             await _SECURITY_DEVICE.update(areas_resp)
         if inputs_resp:
@@ -184,23 +194,20 @@ async def discover_security(gateway):
             await _SECURITY_DEVICE.update(scenarios_resp)
         if outputs_resp:
             await _SECURITY_DEVICE.update(outputs_resp)
-            
+
         return _SECURITY_DEVICE
-        
+
     except Exception as err:
-        _LOGGER.error("SECURITY discovery failed: %s", err)
+        _LOGGER.error("SECURITY ricerca centrale fallita: %s", err)
         return None
 
+
 # ============================================================
-# FACTORY / HANDLER
+# ===== GESTORE EVENTI =====
 # ============================================================
 
-async def handle_security_status_update(_gateway, device_info: Dict[str, Any]) -> bool:
-    """
-    Punto UNICO di ingresso per i pacchetti SECURITY dal gateway.
-    _gateway: il gateway che ha ricevuto l'evento (non utilizzato)
-    event_data: il payload dell'evento
-    """
+async def handle_security_status_update(_gateway, device_info: dict[str, Any]) -> bool:
+    """Punto unico di ingresso per i pacchetti SECURITY dal gateway."""
     global _SECURITY_DEVICE
 
     cmd = device_info.get("cmd_name")
@@ -214,14 +221,12 @@ async def handle_security_status_update(_gateway, device_info: Dict[str, Any]) -
         )
         return False
 
-    # UPDATE DEL DEVICE SECURITY
     updated = await _SECURITY_DEVICE.update(device_info)
     return updated
 
 
-
 # ============================================================
-# DEVICE
+# ===== CENTRALE SICUREZZA =====
 # ============================================================
 
 class SecurityCentral:
@@ -229,15 +234,14 @@ class SecurityCentral:
 
     DEVICE_TYPE = "Security"
 
-    def __init__(self, gateway, central_info: Optional[Dict] = None):
+    def __init__(self, gateway, central_info: dict | None = None):
         self._gateway = gateway
         self._type_id = TYPE_SECURITY_CENTRAL
         self._act_id = None
         self._hass = gateway.hass
         self._initialized = False
-        
-        # ---- stato centrale ----
-        self._state: Dict[str, Any] = {
+
+        self._state: dict[str, Any] = {
             "central_id": None,
             "name": "Security",
             "status": 0,
@@ -248,7 +252,6 @@ class SecurityCentral:
             "extra": None,
         }
 
-        # Se abbiamo info iniziali, aggiorna
         if central_info:
             self._state.update({
                 "central_id": central_info.get("central_id"),
@@ -260,75 +263,63 @@ class SecurityCentral:
                 "extra": central_info.get("extra"),
             })
 
-        # ---- dati dinamici ----
         self._areas: list[dict] = []
         self._known_area_ids: set[int] = set()
         self._areas_state: dict[int, dict] = {}
-       
-        # ---- snapshot HA ----
-        self._last_snapshot: Optional[Dict[str, Any]] = None
+
+        self._last_snapshot: dict[str, Any] | None = None
         self._scenarios: dict[int, dict] = {}
-        
-        # MAPPING DEGLI SCENARI
+
         self._scenario_by_arm: dict[str, int] = {}
-        
+
         self.available = False
         self.update_pending = False
-        
-        # ---- ingressi ----
+
         self._inputs_state: dict[int, dict] = {}
         self._inputs: list[dict] = []
-        
-        # ---- uscite ----
+
         self._outputs_state: dict[int, dict] = {}
         self._outputs: list[dict] = []
-        
+
         _LOGGER.debug(
-            "SECURITY device initialized | uid=%s | thread=%s | mapping=%s",
+            "SECURITY device inizializzato | uid=%s | thread=%s | mapping=%s",
             self.unique_id,
             threading.current_thread().name,
             self._scenario_by_arm,
         )
 
-    # --------------------------------------------------
-    # REQUEST ALL LISTS
-    # --------------------------------------------------
+    # --- Richiesta liste ---
+
     async def _request_all_lists(self):
         """Richiedi tutte le liste di configurazione."""
         if self._initialized:
             return
-            
-        _LOGGER.info("SECURITY requesting all lists for central_id=%s", self.central_id)
-        
-        # Richiedi lista aree
+
+        _LOGGER.info("SECURITY richiesta liste per central_id=%s", self.central_id)
+
         await self._gateway.tx_command({
             "cmd_name": "sicu_areas_list_req",
             "central_id": self.central_id
         })
-        
-        # Richiedi lista ingressi
+
         await self._gateway.tx_command({
             "cmd_name": "sicu_inputs_list_req",
             "central_id": self.central_id
         })
 
-        # Richiedi lista uscite
         await self._gateway.tx_command({
             "cmd_name": "sicu_outputs_list_req",
             "central_id": self.central_id
         })
-        
-        # Richiedi lista scenari
+
         await self._gateway.tx_command({
             "cmd_name": "sicu_scenarios_list_req",
             "central_id": self.central_id
         })
-        
+
         self._initialized = True
 
-    # --------------------------------------------------
-    # IDENTITÀ
-    # --------------------------------------------------
+    # --- Identità ---
 
     @property
     def unique_id(self) -> str:
@@ -339,39 +330,31 @@ class SecurityCentral:
         return self._state.get("name") or "Security"
 
     @property
-    def state(self) -> Dict[str, Any]:
+    def state(self) -> dict[str, Any]:
         return self._state
-        
-    @property
-    def central_id(self) -> Optional[int]:
-        return self._state.get("central_id")        
 
-    # --------------------------------------------------
-    # UPDATE CORE
-    # --------------------------------------------------
-    async def update(self, data: Dict[str, Any]) -> bool:
-        """
-        Accetta pacchetti sicu_* in QUALSIASI ordine.
-        Tutta la logica SECURITY vive qui.
-        """
+    @property
+    def central_id(self) -> int | None:
+        return self._state.get("central_id")
+
+    # --- Aggiornamento centrale ---
+
+    async def update(self, data: dict[str, Any]) -> bool:
+        """Accetta pacchetti sicu_* in qualsiasi ordine. Tutta la logica SECURITY vive qui."""
         cmd = data.get("cmd_name")
         if not isinstance(cmd, str) or not cmd.startswith("sicu_"):
             return False
 
-        # --------------------------------------------------
-        # CENTRALE
-        # --------------------------------------------------
+        # --- Centrale ---
         if cmd == "sicu_central_status_ind":
             return self._update_central(data)
 
-        # --------------------------------------------------
-        # AREE
-        # --------------------------------------------------
+        # --- Aree ---
         if cmd == "sicu_areas_status_ind":
             return self._update_areas(data)
-            
+
         if cmd == "sicu_areas_list_resp":
-            _LOGGER.info("SECURITY received areas list (%d items)", len(data.get("array", [])))
+            _LOGGER.info("SECURITY ricevuta lista aree (%d elementi)", len(data.get("array", [])))
             for area in data.get("array", []):
                 area_id = area.get("area_id")
                 if area_id is not None:
@@ -379,16 +362,14 @@ class SecurityCentral:
                     self._known_area_ids.add(area_id)
             self._areas = list(self._areas_state.values())
             self._rebuild_snapshot()
-            
+
             for area in self._areas:
-                _LOGGER.debug("SECURITY area: %s (ID: %s, status base: %s)", 
-                             area.get("name"), area.get("area_id"), area.get("status")) 
-            
+                _LOGGER.debug("SECURITY area: %s (ID: %s, status base: %s)",
+                             area.get("name"), area.get("area_id"), area.get("status"))
+
             return True
 
-        # --------------------------------------------------
-        # SCENARI
-        # --------------------------------------------------
+        # --- Scenari ---
         if cmd == "sicu_scenarios_list_resp":
             self._scenarios.clear()
 
@@ -409,25 +390,20 @@ class SecurityCentral:
                     self._scenario_by_arm["armed_custom_bypass"] = sid
                     break
 
-            _LOGGER.info(
-                "SECURITY scenarios loaded | count=%s",
-                len(self._scenarios),
-            )
+            _LOGGER.info("SECURITY scenari caricati | count=%s", len(self._scenarios))
 
             for sid, scenario in self._scenarios.items():
                 role = next((r for r, i in self._scenario_by_arm.items() if i == sid), "unknown")
-                _LOGGER.debug("SECURITY scenario %d: %s (areas: %s) -> %s", 
+                _LOGGER.debug("SECURITY scenario %d: %s (areas: %s) -> %s",
                              sid,
                              scenario.get("name"),
                              scenario.get("areas"),
                              role)
             return True
-            
-        # --------------------------------------------------
-        # INGRESSI
-        # --------------------------------------------------
+
+        # --- Ingressi ---
         if cmd == "sicu_inputs_list_resp":
-            _LOGGER.info("SECURITY received inputs list (%d items)", len(data.get("array", [])))
+            _LOGGER.info("SECURITY ricevuta lista ingressi (%d elementi)", len(data.get("array", [])))
             for inp in data.get("array", []):
                 input_id = inp.get("input_id")
                 if input_id is not None:
@@ -435,17 +411,16 @@ class SecurityCentral:
             self._inputs = list(self._inputs_state.values())
             self._rebuild_snapshot()
             for inp in self._inputs:
-                _LOGGER.debug("SECURITY input: %s (ID: %s, type: %s, areas: %s)", 
-                             inp.get("name"), inp.get("input_id"), 
-                             inp.get("type"), inp.get("areas"))                 
-            return True        
-        
+                _LOGGER.debug("SECURITY input: %s (ID: %s, type: %s, areas: %s)",
+                             inp.get("name"), inp.get("input_id"),
+                             inp.get("type"), inp.get("areas"))
+            return True
+
         if cmd == "sicu_input_status_ind":
             input_id = data.get("input_id")
             if input_id is None:
                 return False
 
-            # aggiorna stato cumulativo ingresso
             self._inputs_state[input_id] = {
                 "input_id": input_id,
                 "name": data.get("name"),
@@ -459,25 +434,23 @@ class SecurityCentral:
             self.update_pending = True
 
             _LOGGER.debug(
-                "SECURITY input updated | id=%s name=%s status=%s areas=%s",
+                "SECURITY input aggiornato | id=%s name=%s status=%s areas=%s",
                 input_id,
                 data.get("name"),
                 data.get("status"),
                 data.get("areas"),
             )
             return True
-            
-        # --------------------------------------------------
-        # USCITE
-        # --------------------------------------------------
+
+        # --- Uscite ---
         if cmd == "sicu_outputs_list_resp":
-            _LOGGER.info("SECURITY received outputs list (%d items)", len(data.get("array", [])))
+            _LOGGER.info("SECURITY ricevuta lista uscite (%d elementi)", len(data.get("array", [])))
             for out in data.get("array", []):
                 output_id = out.get("output_id")
                 if output_id is not None:
                     self._outputs_state[output_id] = out
-                    _LOGGER.debug("SECURITY output: %s (ID: %s, status: %s, extra: %s)", 
-                                 out.get("name"), output_id, 
+                    _LOGGER.debug("SECURITY output: %s (ID: %s, status: %s, extra: %s)",
+                                 out.get("name"), output_id,
                                  out.get("status"), out.get("extra"))
             self._outputs = list(self._outputs_state.values())
             self._rebuild_snapshot()
@@ -499,21 +472,18 @@ class SecurityCentral:
             self.update_pending = True
 
             _LOGGER.debug(
-                "SECURITY output updated | id=%s name=%s status=%s",
+                "SECURITY output aggiornato | id=%s name=%s status=%s",
                 output_id,
                 data.get("name"),
                 data.get("status"),
             )
-            return True            
+            return True
 
         return False
 
+    # --- Handler specifici ---
 
-    # --------------------------------------------------
-    # HANDLER SPECIFICI
-    # --------------------------------------------------
-
-    def _update_central(self, data: Dict[str, Any]) -> bool:
+    def _update_central(self, data: dict[str, Any]) -> bool:
         self._state.update(
             {
                 "central_id": data.get("central_id"),
@@ -532,39 +502,34 @@ class SecurityCentral:
         self.update_pending = True
 
         _LOGGER.debug(
-            "SECURITY central updated | id=%s status=%s",
+            "SECURITY centrale aggiornata | id=%s status=%s",
             self._state.get("central_id"),
             self._state.get("status"),
         )
         return True
 
-    def _update_areas(self, data: Dict[str, Any]) -> bool:
-        # delta update: ETI/Domo invia solo le aree cambiate
+    def _update_areas(self, data: dict[str, Any]) -> bool:
         for area in data.get("array", []) or []:
             area_id = area.get("area_id")
             if area_id is None:
                 continue
 
-            # aggiorna stato cumulativo
             self._areas_state[area_id] = area
             self._known_area_ids.add(area_id)
 
-        # ricostruisci SEMPRE la lista completa delle aree
         self._areas = list(self._areas_state.values())
 
         self._rebuild_snapshot()
         self.update_pending = True
 
         _LOGGER.debug(
-            "SECURITY areas updated | count=%s | known=%s",
+            "SECURITY aree aggiornate | count=%s | known=%s",
             len(self._areas),
             sorted(self._known_area_ids),
         )
         return True
 
-    # --------------------------------------------------
-    # DECODIFICA STATO (usata da alarm_control_panel.py per extra_state_attributes)
-    # --------------------------------------------------
+    # --- Decodifica stato ---
 
     @staticmethod
     def decode_central_status(raw):
@@ -584,9 +549,7 @@ class SecurityCentral:
             return None
         return {"raw": raw, "state": INPUT_STATUS_MAP.get(raw, f"sconosciuto_{raw}")}
 
-    # --------------------------------------------------
-    # READINESS SCENARIO (usata da alarm_control_panel.py per l'attesa area non pronta)
-    # --------------------------------------------------
+    # --- Readiness scenario ---
 
     def scenario_ready(self, arm_key: str) -> tuple[bool, list[str]]:
         """Verifica se tutte le aree coinvolte nello scenario di un ruolo sono pronte.
@@ -610,12 +573,11 @@ class SecurityCentral:
     async def arm(self, arm_type: str, code: str | None = None):
         scenario_id = self._scenario_by_arm.get(arm_type)
         if scenario_id is None:
-            _LOGGER.error("SECURITY no scenario for %s", arm_type)
+            _LOGGER.error("SECURITY nessuno scenario per %s", arm_type)
             return
 
-        # PRIMA chiamata HA (senza code) → IGNORA
         if not code:
-            _LOGGER.debug("SECURITY arm pre-call without code (%s)", arm_type)
+            _LOGGER.debug("SECURITY chiamata arm preliminare senza codice (%s)", arm_type)
             return
 
         payload = {
@@ -641,9 +603,9 @@ class SecurityCentral:
 
     async def arm_night(self, code: str | None = None):
         await self.arm("armed_night", code)
-        
+
     async def arm_custom_bypass(self, code: str | None = None):
-        await self.arm("armed_custom_bypass", code)        
+        await self.arm("armed_custom_bypass", code)
 
     async def disarm(self, code: str | None = None):
         if not self._gateway:
@@ -661,7 +623,7 @@ class SecurityCentral:
         await self._gateway.tx_command(payload, resp_command=None)
 
     async def reset_event_memory(self, code: str | None = None):
-        _LOGGER.info(">>> reset_event_memory CALLED with code: %s", code)
+        _LOGGER.debug("SECURITY reset_event_memory chiamato | code=%s", code)
         if not self._gateway:
             return
 
@@ -677,7 +639,7 @@ class SecurityCentral:
         await self._gateway.tx_command(payload, resp_command=None)
 
     async def silence(self, code: str | None = None):
-        """Tacita sirene / allarme in corso."""
+        """Tacita sirene/allarme in corso."""
         if not self._gateway:
             return
 
@@ -692,9 +654,7 @@ class SecurityCentral:
 
         await self._gateway.tx_command(payload, resp_command=None)
 
-    # --------------------------------------------------
-    # SNAPSHOT
-    # --------------------------------------------------
+    # --- Snapshot ---
 
     def _rebuild_snapshot(self):
         _LOGGER.debug(
@@ -702,7 +662,7 @@ class SecurityCentral:
             self._state.get("status"),
             self._areas,
             sorted(self._known_area_ids),
-        )    
+        )
         self._last_snapshot = {
             "central": dict(self._state),
             "areas": list(self._areas),
@@ -710,13 +670,13 @@ class SecurityCentral:
             "outputs": list(self._outputs),
             "known_area_ids": sorted(self._known_area_ids),
         }
-            
+
         self.update_pending = True
 
-        # ⚡ Notifica l'entità HA che ci sono nuovi dati
         if self._hass:
             async_dispatcher_send(self._hass, SIGNAL_UPDATE_ENTITY)
 
+
 def get_security_device():
-    """Return the SECURITY central singleton, if available."""
+    """Ritorna il singleton della centrale SECURITY, se disponibile."""
     return _SECURITY_DEVICE
