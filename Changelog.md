@@ -208,7 +208,7 @@ From now on it can be installed with a simple search, without any additional con
 
 - SecurityEventsLogger now uses a portable log path via hass.config.path() instead of a hardcoded /config path, and file I/O (directory creation, log writes) now runs in an executor to avoid blocking the event loop.
 
-## [1.8.0] - 2026-08-18
+## [1.8.0] - 2026-08-20
 
 ### 🚀 Features
 

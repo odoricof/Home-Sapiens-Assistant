@@ -573,6 +573,7 @@ def _loadsctrl_meter_device_info(meter: DomoLoadCtrlMeter) -> DeviceInfo:
         name=meter.name,
         manufacturer="Home Sapiens Assistant",
         model="Eti/Domo",
+        via_device=(DOMAIN, "loadsctrl_root"),
     )
 
 

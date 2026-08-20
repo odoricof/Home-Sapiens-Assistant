@@ -208,7 +208,7 @@ D'ora in poi è installabile con una semplice ricerca, senza configurazioni aggi
 
 - SecurityEventsLogger ora utilizza un percorso di log portabile tramite hass.config.path() invece di un percorso /config fisso, e le operazioni di I/O su file (creazione directory, scrittura log) vengono eseguite in un executor per non bloccare il event loop.
 
-## [1.8.0] - 2026-08-18
+## [1.8.0] - 2026-08-20
 
 ### 🚀 Features
 
