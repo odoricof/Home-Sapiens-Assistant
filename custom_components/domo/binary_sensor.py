@@ -21,6 +21,7 @@ import logging
 
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 
@@ -56,12 +57,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
     # --- Security Outputs ---
     security = get_security_device()
     if security and hasattr(security, "_outputs") and security._outputs:
+        burglar_alarm_device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, "burglar_alarm"), entry.entry_id
+        )
         security_outputs_device_info = DeviceInfo(
             identifiers={(DOMAIN, "burglar_alarm_outputs")},
             name="Security Outputs",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
-            via_device=(DOMAIN, "burglar_alarm"),
+            via_device_id=burglar_alarm_device.id if burglar_alarm_device else None,
         )
 
         for output in security._outputs:

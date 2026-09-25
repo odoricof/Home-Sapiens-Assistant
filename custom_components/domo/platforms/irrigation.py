@@ -1,5 +1,5 @@
 """
-domo/platforms/irrigation.py
+platforms/irrigation.py
 
 Entities fed by this file:
 - domo/number.py  : Seasonal percentage, Work cycle, Max irrigation time
@@ -13,11 +13,13 @@ License: MIT
 This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
 Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
+
+status: passed
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
@@ -25,27 +27,30 @@ from ..const import SIGNAL_DISCOVERY_NEW, SIGNAL_UPDATE_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
+
+# ============================================================
+# ===== HELPERS =====
+# ============================================================
+
 WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
-_IRRIGATION_ZONES: Dict[int, "DomoIrrigationZone"] = {}
+_IRRIGATION_ZONES: dict[int, DomoIrrigationZone] = {}
 
 
-def _decode_days(days: int) -> List[str]:
-    """Decodifica la bitmask 'days' nei giorni della settimana attivi."""
+def _decode_days(days: int) -> list[str]:
+    """Decode the 'days' bitmask into active weekday names."""
     return [WEEKDAYS[i] for i in range(7) if days & (1 << i)]
 
 
 def _encode_day_change(current_days: int, day_index: int, value: int) -> int:
-    """Calcola la nuova bitmask 'days' abilitando/disabilitando un singolo giorno,
-    preservando lo stato degli altri giorni."""
+    """Return the 'days' bitmask with a single day enabled or disabled."""
     if value:
         return current_days | (1 << day_index)
     return current_days & ~(1 << day_index)
 
 
-def _decode_time(data: Optional[Dict[str, Any]]) -> Optional[Dict[str, int]]:
-    """Normalizza un oggetto {hour,min,sec} del gateway.
-    Il gateway usa -1 per 'non impostato': in tal caso restituisce None."""
+def _decode_time(data: dict[str, Any] | None) -> dict[str, int] | None:
+    """Normalize a gateway {hour,min,sec} object, returning None when unset (-1)."""
     if not data:
         return None
     hour = data.get("hour", -1)
@@ -58,10 +63,14 @@ def _decode_time(data: Optional[Dict[str, Any]]) -> Optional[Dict[str, int]]:
     }
 
 
-class DomoSprinkler:
-    """Singolo irrigatore appartenente a un settore di irrigazione (campo 'sprinklers[]')."""
+# ============================================================
+# ===== SPRINKLER =====
+# ============================================================
 
-    def __init__(self, zone: "DomoIrrigationZone", data: Dict[str, Any]):
+class DomoSprinkler:
+    """Single sprinkler belonging to an irrigation zone."""
+
+    def __init__(self, zone: DomoIrrigationZone, data: dict[str, Any]):
         self._zone = zone
         self._act_id = data.get("act_id")
         self._name = data.get("name", f"Irrigatore {self._act_id}")
@@ -71,7 +80,7 @@ class DomoSprinkler:
         self._duty = data.get("duty")
 
     @property
-    def zone(self) -> "DomoIrrigationZone":
+    def zone(self) -> DomoIrrigationZone:
         return self._zone
 
     @property
@@ -100,18 +109,18 @@ class DomoSprinkler:
 
     @property
     def is_active(self) -> bool:
-        """True se questo irrigatore sta erogando acqua in questo momento."""
+        """True if this sprinkler is currently delivering water."""
         return self._status == 1
 
     @property
-    def active(self) -> Optional[int]:
+    def active(self) -> int | None:
         return self._active
 
     @property
-    def duty(self) -> Optional[int]:
+    def duty(self) -> int | None:
         return self._duty
 
-    def update(self, data: Dict[str, Any]) -> None:
+    def update(self, data: dict[str, Any]) -> None:
         if "name" in data:
             self._name = data["name"]
         if "enabled" in data:
@@ -124,10 +133,14 @@ class DomoSprinkler:
             self._duty = data["duty"]
 
 
-class DomoIrrigationZone:
-    """Settore di irrigazione ETI Domo / CAME Domotic (feature 'irrig')."""
+# ============================================================
+# ===== IRRIGATION ZONE =====
+# ============================================================
 
-    def __init__(self, gateway, data: Dict[str, Any]):
+class DomoIrrigationZone:
+    """ETI Domo / CAME Domotic irrigation zone (feature 'irrig')."""
+
+    def __init__(self, gateway, data: dict[str, Any]):
         self._gateway = gateway
         self._id = data["id"]
         self._name = data.get("name", f"Settore irrigazione {self._id}")
@@ -139,7 +152,7 @@ class DomoIrrigationZone:
         self._start = _decode_time(data.get("start"))
         self._end = _decode_time(data.get("end"))
 
-        self._sprinklers: Dict[int, DomoSprinkler] = {}
+        self._sprinklers: dict[int, DomoSprinkler] = {}
         for spr in data.get("sprinklers", []) or []:
             act_id = spr.get("act_id")
             if act_id is not None:
@@ -153,9 +166,6 @@ class DomoIrrigationZone:
             list(self._sprinklers.keys()),
         )
 
-    # --------------------------------------------------
-    # PROPRIETA'
-    # --------------------------------------------------
     @property
     def zone_id(self) -> int:
         return self._id
@@ -178,12 +188,12 @@ class DomoIrrigationZone:
 
     @property
     def is_watering(self) -> bool:
-        """True se il settore sta irrigando in questo momento."""
+        """True if the zone is currently watering."""
         return self._status == 1
 
     @property
     def forced(self) -> bool:
-        """True se e' in corso un'irrigazione forzata manualmente."""
+        """True if a manual forced irrigation is running."""
         return self._forced
 
     @property
@@ -191,36 +201,33 @@ class DomoIrrigationZone:
         return self._days
 
     @property
-    def active_weekdays(self) -> List[str]:
+    def active_weekdays(self) -> list[str]:
         return _decode_days(self._days)
 
     @property
     def perc(self) -> int:
-        """Percentuale di durata rispetto al tempo nominale (es. 100 = nominale)."""
+        """Duration percentage relative to nominal time (100 = nominal)."""
         return self._perc
 
     @property
-    def start(self) -> Optional[Dict[str, int]]:
-        """Orario di partenza programmato, o None se non impostato."""
+    def start(self) -> dict[str, int] | None:
+        """Scheduled start time, or None if not set."""
         return self._start
 
     @property
-    def end(self) -> Optional[Dict[str, int]]:
-        """Orario di fine (calcolato dal gateway in base a durata/perc), sola lettura."""
+    def end(self) -> dict[str, int] | None:
+        """Scheduled end time computed by the gateway, read-only."""
         return self._end
 
     @property
-    def sprinklers(self) -> List[DomoSprinkler]:
+    def sprinklers(self) -> list[DomoSprinkler]:
         return list(self._sprinklers.values())
 
-    def get_sprinkler(self, act_id: int) -> Optional[DomoSprinkler]:
+    def get_sprinkler(self, act_id: int) -> DomoSprinkler | None:
         return self._sprinklers.get(act_id)
 
-    # --------------------------------------------------
-    # UPDATE
-    # --------------------------------------------------
-    def update(self, data: Dict[str, Any]) -> bool:
-        """Aggiorna il settore con i nuovi dati ricevuti dal bus (irrigation_detail_ind)."""
+    def update(self, data: dict[str, Any]) -> bool:
+        """Update the zone from bus data (irrigation_detail_ind); return True if changed."""
         if data.get("id") != self._id:
             return False
 
@@ -284,14 +291,15 @@ class DomoIrrigationZone:
                 "IRRIGATION zone updated | id=%s enabled=%s status=%s forced=%s perc=%s",
                 self._id, self._enabled, self._status, self._forced, self._perc,
             )
-        return True
+        return changed
 
 
 # ============================================================
-# DISCOVERY
+# ===== DISCOVERY =====
 # ============================================================
+
 async def discover_irrigation_zones(gateway):
-    """Scopre i settori di irrigazione disponibili (feature 'irrig')."""
+    """Discover the available irrigation zones (feature 'irrig')."""
     _LOGGER.info("IRRIGATION starting discovery")
 
     try:
@@ -304,7 +312,7 @@ async def discover_irrigation_zones(gateway):
         return []
 
     if not resp or "array" not in resp:
-        _LOGGER.debug("IRRIGATION: nessun settore trovato")
+        _LOGGER.debug("IRRIGATION: no zones found")
         return []
 
     zones = []
@@ -322,27 +330,61 @@ async def discover_irrigation_zones(gateway):
     return zones
 
 
-def get_all_irrigation_zones() -> List["DomoIrrigationZone"]:
+async def refresh_all_irrigation(gateway) -> None:
+    """Resynchronize all irrigation zones after the gateway comes back online."""
+    _LOGGER.info("IRRIGATION starting refresh (gateway reconnect)")
+
+    try:
+        resp = await gateway.tx_command(
+            {"cmd_name": "irrigation_list_req", "detailed": 1},
+            resp_command="irrigation_list_resp",
+        )
+    except Exception as err:
+        _LOGGER.error("IRRIGATION refresh failed: %s", err)
+        return
+
+    if not resp or "array" not in resp:
+        _LOGGER.debug("IRRIGATION refresh: no data received")
+        return
+
+    updated = 0
+    for item in resp.get("array", []):
+        zone_id = item.get("id")
+        if zone_id is None:
+            continue
+        zone = _IRRIGATION_ZONES.get(zone_id)
+        if zone is None:
+            _LOGGER.warning("IRRIGATION refresh: unknown zone id=%s, ignored", zone_id)
+            continue
+        if zone.update(item) and gateway and gateway.hass:
+            async_dispatcher_send(gateway.hass, SIGNAL_UPDATE_ENTITY, zone.unique_id)
+            updated += 1
+
+    _LOGGER.info("IRRIGATION refresh completed | %d zone(s) updated", updated)
+
+
+def get_all_irrigation_zones() -> list[DomoIrrigationZone]:
     return list(_IRRIGATION_ZONES.values())
 
 
-def get_all_sprinklers() -> List["DomoSprinkler"]:
-    """Ritorna tutti gli irrigatori di tutti i settori, per il setup iniziale delle entita'."""
-    result: List[DomoSprinkler] = []
+def get_all_sprinklers() -> list[DomoSprinkler]:
+    """Return all sprinklers of all zones, for initial entity setup."""
+    result: list[DomoSprinkler] = []
     for zone in _IRRIGATION_ZONES.values():
         result.extend(zone.sprinklers)
     return result
 
 
-def get_irrigation_zone(zone_id: int) -> Optional["DomoIrrigationZone"]:
+def get_irrigation_zone(zone_id: int) -> DomoIrrigationZone | None:
     return _IRRIGATION_ZONES.get(zone_id)
 
 
 # ============================================================
-# HANDLER BUS
+# ===== BUS HANDLER =====
 # ============================================================
-def handle_irrigation_status_update(gateway, device_info: Dict[str, Any]) -> bool:
-    """Punto unico di ingresso per i pacchetti 'irrigation_detail_ind' dal gateway."""
+
+def handle_irrigation_status_update(gateway, device_info: dict[str, Any]) -> bool:
+    """Single entry point for 'irrigation_detail_ind' packets from the gateway."""
     cmd = device_info.get("cmd_name")
     if cmd != "irrigation_detail_ind":
         return False
@@ -377,10 +419,11 @@ def handle_irrigation_status_update(gateway, device_info: Dict[str, Any]) -> boo
 
 
 # ============================================================
-# FUNZIONI DI COMANDO
+# ===== COMMAND FUNCTIONS =====
 # ============================================================
+
 async def async_set_irrigation_enabled(zone_id: int, value: int, gateway) -> None:
-    """Abilita/disabilita un settore di irrigazione."""
+    """Enable or disable an irrigation zone."""
     await gateway.tx_command(
         {"cmd_name": "irrigation_set_req", "id": zone_id, "enabled": value},
         resp_command=None,
@@ -388,7 +431,7 @@ async def async_set_irrigation_enabled(zone_id: int, value: int, gateway) -> Non
 
 
 async def async_set_irrigation_perc(zone_id: int, perc: int, gateway) -> None:
-    """Imposta la percentuale di durata dell'irrigazione (100 = durata nominale)."""
+    """Set the irrigation duration percentage (100 = nominal duration)."""
     await gateway.tx_command(
         {"cmd_name": "irrigation_set_req", "id": zone_id, "perc": perc},
         resp_command=None,
@@ -396,7 +439,7 @@ async def async_set_irrigation_perc(zone_id: int, perc: int, gateway) -> None:
 
 
 async def async_set_irrigation_days(zone_id: int, days: int, gateway) -> None:
-    """Imposta la bitmask completa dei giorni attivi (mon=bit0 ... sun=bit6)."""
+    """Set the full active-days bitmask (mon=bit0 ... sun=bit6)."""
     await gateway.tx_command(
         {"cmd_name": "irrigation_set_req", "id": zone_id, "days": days},
         resp_command=None,
@@ -404,11 +447,10 @@ async def async_set_irrigation_days(zone_id: int, days: int, gateway) -> None:
 
 
 async def async_set_irrigation_day(zone_id: int, day_index: int, value: int, gateway) -> None:
-    """Abilita/disabilita un singolo giorno della settimana per un settore."""
-    
+    """Enable or disable a single weekday for a zone."""
     zone = get_irrigation_zone(zone_id)
     if zone is None:
-        _LOGGER.warning("IRRIGATION: set_day su zona sconosciuta id=%s", zone_id)
+        _LOGGER.warning("IRRIGATION: set_day on unknown zone id=%s", zone_id)
         return
     new_days = _encode_day_change(zone.days, day_index, value)
     await async_set_irrigation_days(zone_id, new_days, gateway)
@@ -417,7 +459,7 @@ async def async_set_irrigation_day(zone_id: int, day_index: int, value: int, gat
 async def async_set_irrigation_start(
     zone_id: int, hour: int, minute: int, second: int, gateway
 ) -> None:
-    """Imposta l'orario di partenza programmato del settore."""
+    """Set the scheduled start time of the zone."""
     await gateway.tx_command(
         {
             "cmd_name": "irrigation_set_req",
@@ -429,7 +471,7 @@ async def async_set_irrigation_start(
 
 
 async def async_set_sprinkler_enabled(zone_id: int, act_id: int, value: int, gateway) -> None:
-    """Abilita/disabilita il singolo irrigatore di un settore."""
+    """Enable or disable a single sprinkler of a zone."""
     await gateway.tx_command(
         {
             "cmd_name": "irrigation_set_req",
@@ -441,7 +483,7 @@ async def async_set_sprinkler_enabled(zone_id: int, act_id: int, value: int, gat
 
 
 async def async_set_sprinkler_active(zone_id: int, act_id: int, seconds: int, gateway) -> None:
-    """Imposta il tempo massimo di irrigazione (in secondi) del singolo irrigatore."""
+    """Set the maximum irrigation time (seconds) of a single sprinkler."""
     await gateway.tx_command(
         {
             "cmd_name": "irrigation_set_req",
@@ -453,7 +495,7 @@ async def async_set_sprinkler_active(zone_id: int, act_id: int, seconds: int, ga
 
 
 async def async_set_sprinkler_duty(zone_id: int, act_id: int, duty: int, gateway) -> None:
-    """Imposta il ciclo di lavoro (duty cycle, %) del singolo irrigatore."""
+    """Set the duty cycle (%) of a single sprinkler."""
     await gateway.tx_command(
         {
             "cmd_name": "irrigation_set_req",
@@ -465,7 +507,7 @@ async def async_set_sprinkler_duty(zone_id: int, act_id: int, duty: int, gateway
 
 
 async def async_force_irrigation(zone_id: int, gateway) -> None:
-    """Forza l'avvio/arresto manuale dell'irrigazione."""
+    """Force manual start/stop of the irrigation."""
     await gateway.tx_command(
         {"cmd_name": "irrigation_force_req", "id": zone_id},
         resp_command=None,

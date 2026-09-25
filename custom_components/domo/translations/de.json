@@ -33,5 +33,198 @@
     "error": {
       "cannot_connect": "Verbindung mit den neuen Anmeldedaten nicht möglich"
     }
+  },
+  "sicu_notifications": {
+    "state_labels": {
+      "armed_away": "AKTIV ABWESEND",
+      "armed_night": "AKTIV NACHT",
+      "armed_home": "AKTIV ZUHAUSE",
+      "armed_custom_bypass": "TEILWEISE AKTIV",
+      "disarmed": "DEAKTIVIERT"
+    },
+    "unknown_area": "Unbekannt",
+    "alarm_triggered": {
+      "title": "🚨 ALARM AKTIV!",
+      "message_single": "Sensor ausgelöst: {sensor} (Bereich {area}) - {time}",
+      "message_multiple": "Sensoren ausgelöst: {sensors} - {time}"
+    },
+    "state_change": {
+      "title": "🛡️ ALARMZENTRALE",
+      "message": "Status: {state} - {time}"
+    },
+    "pending_arm": {
+      "title": "⚠️ SCHARFSCHALTUNG AUSSTEHEND",
+      "message": "Achtung: Scharfschaltung läuft mit offenen Eingängen (Bereich: {areas})"
+    }
+  },
+  "sicu_entities": {
+    "area_status": {
+      "not_ready": "Nicht bereit",
+      "arming_open_inputs": "Scharfschaltung mit offenen Eingängen",
+      "input_open_pending_disarm": "Eingang offen, Unscharfschaltung ausstehend",
+      "intrusion_open_inputs": "Einbruch erkannt, Eingänge offen",
+      "ready": "Bereit",
+      "arming": "Scharfschaltung läuft",
+      "armed": "Scharf",
+      "intrusion_alarm": "Einbruchalarm aktiv",
+      "intrusion_detected": "Einbruch erkannt",
+      "alarm_memory": "Alarmspeicher",
+      "open_and_bypassed": "Offene und überbrückte Eingänge",
+      "ready_bypassed": "Bereit mit überbrückten Eingängen",
+      "unknown": "Unbekannt"
+    },
+    "input_status": {
+      "closed": "Geschlossen",
+      "bypassed": "Überbrückt",
+      "alarm_memory": "Alarmspeicher",
+      "unknown": "Unbekannt",
+      "open": "Offen",
+      "alarm": "Alarm",
+      "low_battery": "Batterie schwach"
+    },
+    "unknown_with_code": "Unbekannt ({code})",
+    "action_names": {
+      "silence": "CODE - Sirenen stummschalten",
+      "reset_event_memory": "CODE - Ereignisspeicher zurücksetzen"
+    },
+    "action_feedback": {
+      "no_action": "Keine Aktion ausgeführt",
+      "done": "erledigt",
+      "error": "Fehler"
+    }
+  },
+  "common_entities": {
+    "weekday_labels": {
+      "mon": "Montag",
+      "tue": "Dienstag",
+      "wed": "Mittwoch",
+      "thu": "Donnerstag",
+      "fri": "Freitag",
+      "sat": "Samstag",
+      "sun": "Sonntag"
+    }
+  },
+  "scheduler_entities": {
+    "entity_names": {
+      "enabled": "Aktiviert"
+    },
+    "slot_disabled": "Deaktiviert"
+  },
+  "thermoregulation_entities": {
+    "entity_names": {
+      "profile": "Tägliches Heizprofil (HH:MM-HH:MM=tN,...)",
+      "plant_mode": "Jahreszeit",
+      "algo_mode": "Algorithmusmodus",
+      "profile_day": "Tag des Heizprofils",
+      "profile_copy": "Heizprofil kopieren nach",
+      "restore_file": "Sicherungsdatei für Heizprofile",
+      "antifreeze": "Frostschutz",
+      "differential": "Thermisches Differential",
+      "thermo_backup_button": "Thermische Profile sichern",
+      "thermo_restore_button": "Thermische Profile wiederherstellen"
+    },
+    "restore_file": {
+      "placeholder": "-- Datei auswählen --",
+      "status": {
+        "in_progress": "Wiederherstellung läuft...",
+        "verify_failed": "Wiederherstellung: Überprüfung fehlgeschlagen",
+        "done": "Wiederherstellung abgeschlossen"
+      }
+    },
+    "algo_mode_options": {
+      "pi1": "Proportional-Integral 1",
+      "pi2": "Proportional-Integral 2",
+      "pi3": "Proportional-Integral 3",
+      "pi4": "Proportional-Integral 4",
+      "differential": "Differenzial"
+    },
+    "weekday_options": {
+      "monday": "Montag",
+      "tuesday": "Dienstag",
+      "wednesday": "Mittwoch",
+      "thursday": "Donnerstag",
+      "friday": "Freitag",
+      "saturday": "Samstag",
+      "sunday": "Sonntag"
+    },
+    "season_options": {
+      "summer": "Sommer",
+      "winter": "Winter",
+      "plant_off": "Anlage aus"
+    },
+    "copy_profile": {
+      "placeholder": "Auswählen",
+      "all_week": "Ganze Woche"
+    },
+    "errors": {
+      "invalid_option": "Ungültige Option: {option}",
+      "no_thermostat_available": "Kein Thermostat verfügbar",
+      "no_backup_available": "Keine Sicherung verfügbar"
+    },
+    "action_feedback": {
+      "pending": "Bitte warten...",
+      "send_error": "Fehler beim Senden des Befehls: {err}",
+      "command_ignored": "Befehl ignoriert: Sollwert für diesen Thermostat noch nicht bekannt.",
+      "algo_mode_send_error": "Fehler beim Senden von thermo_zone_config_req: {err}",
+      "command_ignored_profile_incomplete": "Befehl ignoriert: Heizprofil für dieses Thermostat noch nicht vollständig.",
+      "backup_error": "Sicherung fehlgeschlagen: {err}",
+      "no_restore_file_selected": "Keine Wiederherstellungsdatei ausgewählt",
+      "restore_error": "Wiederherstellung fehlgeschlagen ({filename}): {err}"
+    }
+  },
+  "loadsctrl_entities": {
+    "entity_names": {
+      "profile": "Tägliches Energieprofil (H-H=W, H-H=W)",
+      "profile_day": "Tag des Energieprofils",
+      "max_power": "Vollausschlag",
+      "hysteresis": "Hysterese"
+    },
+    "weekday_options": {
+      "monday": "Montag",
+      "tuesday": "Dienstag",
+      "wednesday": "Mittwoch",
+      "thursday": "Donnerstag",
+      "friday": "Freitag",
+      "saturday": "Samstag",
+      "sunday": "Sonntag"
+    },
+    "action_feedback": {
+      "pending": "Bitte warten...",
+      "send_error": "Fehler beim Senden des Befehls: {err}"
+    }
+  },
+  "irrigation_entities": {
+    "entity_names": {
+      "enabled": "Aktiviert",
+      "manual_mode": "Manueller Modus",
+      "seasonal_percentage": "% Saisonal",
+      "active_time": "Max. Bewässerungszeit",
+      "duty_cycle": "Tastverhältnis",
+      "start_time": "STARTZEIT",
+      "end_time": "ENDZEIT"
+    },
+    "action_feedback": {
+      "send_error": "Fehler beim Senden des Befehls: {err}",
+      "end_time_readonly": "Die Endzeit wird automatisch vom Gateway berechnet: nicht bearbeitbar."
+    }
+  },
+  "scenarios_entities": {
+    "entity_names": {
+      "name": "Szenarioname",
+      "start_registration_button": "Szenarioregistrierung starten",
+      "stop_registration_button": "Szenarioregistrierung abschließen",
+      "delete_button": "Szenario löschen",
+      "rename_button": "Szenario umbenennen"
+    },
+    "status": {
+      "recording": "Aufnahme läuft: {name}",
+      "new_name": "Neuer Name: "
+    },
+    "action_feedback": {
+      "start_registration_error": "Fehler beim Starten der Szenarioregistrierung: {err}",
+      "stop_registration_error": "Fehler beim Beenden der Szenarioregistrierung: {err}",
+      "delete_error": "Fehler beim Löschen des Szenarios: {err}",
+      "rename_error": "Fehler beim Starten der Szenario-Umbenennung: {err}"
+    }
   }
 }

@@ -1,6 +1,11 @@
 """
 platforms/scenarios.py
 
+Entities fed by this file:
+- domo/text.py : scenario name/status text (name_draft, status_message, submit_text_value)
+- domo/button.py : start/stop registration, delete and rename buttons
+- domo/select.py : scenario target select (user_defined_scenarios, target_id)
+
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
 License: MIT
@@ -8,44 +13,50 @@ License: MIT
 This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
 Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
+
+status: passed
 """
 from __future__ import annotations
 
-import logging
 import asyncio
-from typing import Dict, Any, List
+import logging
+from typing import Any
 
 from homeassistant.helpers.dispatcher import async_dispatcher_send
- 
+
 from ..const import SIGNAL_UPDATE_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
-# Dizionario per tenere traccia degli scenari (usiamo un ID fisso -1 per il dispositivo contenitore)
-_SCENARIO_DEVICE = None
 
+_SCENARIO_DEVICE: DomoScenarioDevice | None = None
+
+
+# ============================================================
+# ===== SCENARIO DEVICE =====
+# ============================================================
 
 class DomoScenarioDevice:
-    """Dispositivo contenitore per tutti gli scenari Domo."""
+    """Container device for all Domo scenarios."""
 
     def __init__(self, gateway):
         self._gateway = gateway
-        self._name = "Scenari"
-        self._act_id = -1  # ID fisso per il contenitore scenari
-        self._registration_state = "idle"  # "idle" | "recording"
+        self._name = "Scenarios"
+        self._act_id = -1
+        self._registration_state = "idle"
         self._name_draft: str = ""
         self._target_id: int | None = None
         self._status_message: str | None = None
         self._status_token: int = 0
         self._pending_action: str | None = None
         self._pending_action_event: asyncio.Event | None = None
-        self._scenarios_cache: List[Dict[str, Any]] = []
+        self._scenarios_cache: list[dict[str, Any]] = []
         self._rename_pending: bool = False
         self._rename_target_id: int | None = None
-        
+
         global _SCENARIO_DEVICE
         _SCENARIO_DEVICE = self
-        
+
         _LOGGER.debug("SCENARIO device created")
 
     @property
@@ -58,8 +69,8 @@ class DomoScenarioDevice:
 
     @property
     def unique_id(self) -> str:
-        return f"scene.domo_scenarios"
-        
+        return "scene.domo_scenarios"
+
     @property
     def registration_state(self) -> str:
         return self._registration_state
@@ -67,7 +78,7 @@ class DomoScenarioDevice:
     @property
     def status_message(self) -> str | None:
         return self._status_message
-        
+
     @property
     def can_start_registration(self) -> bool:
         return self._registration_state == "idle" and bool(self._name_draft)
@@ -80,63 +91,47 @@ class DomoScenarioDevice:
     def name_draft(self) -> str:
         return self._name_draft
 
-    def set_name_draft(self, value: str) -> None:
-        self._name_draft = value
-        self._notify_scenario_ui()
-        
     @property
     def rename_pending(self) -> bool:
         return self._rename_pending
-        
+
     @property
     def target_id(self) -> int | None:
         return self._target_id
 
+    @property
+    def user_defined_scenarios(self) -> list[dict[str, Any]]:
+        """User-created scenarios (excludes the factory ones)."""
+        return [s for s in self._scenarios_cache if s.get("user-defined") == 1]
+
+    def set_name_draft(self, value: str) -> None:
+        self._name_draft = value
+        self._notify_scenario_ui()
+
     def set_target(self, scenario_id: int | None) -> None:
         self._target_id = scenario_id
 
-    @property
-    def user_defined_scenarios(self) -> List[Dict[str, Any]]:
-        """Scenari creati dall'utente (esclude i 4 scenari di fabbrica)."""
-        return [s for s in self._scenarios_cache if s.get("user-defined") == 1]
-              
-
-    async def available_scenarios(self) -> List[Dict[str, Any]]:
-        """Restituisce la lista degli scenari disponibili."""
+    async def available_scenarios(self) -> list[dict[str, Any]]:
+        """Return the list of available scenarios."""
         return await self._get_scenarios()
 
-    async def _get_scenarios(self) -> List[Dict[str, Any]]:
-        """Recupera la lista degli scenari dal gateway."""
-        resp = await self._gateway.tx_command({
-            "cmd_name": "scenarios_list_req"
-        }, resp_command="scenarios_list_resp")
-        
-        if not resp:
-            _LOGGER.error("No response from gateway for scenarios list")
-            return []
-        
-        scenarios = resp.get("array", [])
-        _LOGGER.debug("Retrieved %d scenarios", len(scenarios))
-        self._scenarios_cache = scenarios
-        return scenarios
-
     async def activate_scenario(self, scenario_id: int) -> bool:
-        """Attiva uno scenario esistente."""
+        """Activate an existing scenario."""
         await self._gateway.tx_command({
             "cmd_name": "scenario_activation_req",
             "id": scenario_id
-        }, resp_command=None)  # Non aspettiamo risposta specifica
-        
+        }, resp_command=None)
+
         _LOGGER.debug("Activated scenario %d", scenario_id)
         return True
 
     async def create_scenario(self, name: str) -> bool:
-        """Inizia la registrazione di un nuovo scenario."""
+        """Start recording a new scenario."""
         resp = await self._gateway.tx_command({
             "cmd_name": "scenario_registration_start",
             "name": name
         }, resp_command="scenario_registration_resp")
-        
+
         success = bool(resp and resp.get("result") == 1)
         if success:
             self._registration_state = "recording"
@@ -144,9 +139,8 @@ class DomoScenarioDevice:
             _LOGGER.debug("Started scenario creation: %s", name)
         return success
 
-    async def stop_scenario_registration(self) -> bool:
-        """Termina la registrazione in corso e salva lo scenario (solo se
-        sono stati registrati cambi di stato nel frattempo)."""
+    async def stop_scenario_registration(self) -> dict[str, Any] | None:
+        """Stop the recording and return the gateway response, if any."""
         resp = await self._gateway.tx_command({
             "cmd_name": "scenario_registration_done"
         }, resp_command="scenario_registration_done_resp")
@@ -155,19 +149,17 @@ class DomoScenarioDevice:
         return resp
 
     async def start_registration(self) -> bool:
-        """Avvia la registrazione di un nuovo scenario usando il nome
-        correntemente scritto in name_draft. Chiamato dal button
-        'Avvia registrazione scenario'."""
+        """Start recording using the name currently in name_draft."""
         if self._registration_state == "recording":
             return False
         if self._rename_pending:
             self._set_status_message("Nuovo nome: ", transient=False)
             return False
-            
+
         if not self._name_draft:
             self._set_status_message("Inserire nome nuovo scenario", transient=True)
             return False
-            
+
         ok = await self.create_scenario(self._name_draft)
         if ok:
             self._notify_scenario_ui()
@@ -176,13 +168,11 @@ class DomoScenarioDevice:
         return ok
 
     async def stop_registration(self) -> str:
-        """Ferma la registrazione in corso. Se sono stati registrati
-        cambiamenti, lo scenario e' salvato; altrimenti annulla.
-        Chiamato dal button 'Ferma registrazione scenario'."""
+        """Stop the recording; the scenario is saved only if changes were recorded."""
         if self._registration_state != "recording":
             self._set_status_message("Nessuna registrazione in corso", transient=True)
             return "not_recording"
- 
+
         name = self._name_draft
         resp = await self.stop_scenario_registration()
         result = resp.get("result") if resp else None
@@ -192,8 +182,6 @@ class DomoScenarioDevice:
         elif result == 0:
             confirmed = False
         else:
-            # Nessuna risposta dal gateway (caso raro osservato in test):
-            # usiamo l'evento asincrono come rete di sicurezza.
             confirmed = await self.wait_for_user_action("create")
         await self._get_scenarios()
         self._name_draft = ""
@@ -204,21 +192,19 @@ class DomoScenarioDevice:
             self._set_status_message("Annullato, scenario vuoto", transient=True)
         return "ok" if confirmed else "empty"
 
-
     async def delete_scenario(self, scenario_id: int) -> bool:
-        """Elimina uno scenario esistente."""
+        """Delete an existing scenario."""
         self._arm_pending_action("delete")
         await self._gateway.tx_command({
             "cmd_name": "scenario_delete_req",
             "id": scenario_id
-        }, resp_command=None)  # il gateway risponde con un generic_reply
+        }, resp_command=None)
 
         _LOGGER.debug("Deleted scenario %d", scenario_id)
         return True
 
     async def delete_scenario_by_name(self, name: str) -> str:
-        """Cancella lo scenario il cui nome corrisponde a `name` (letto dal
-        text). Chiamato dal button 'Cancella scenario'."""
+        """Delete the user-defined scenario matching `name`."""
         if self._registration_state == "recording":
             self._set_status_message("Registrazione in corso", transient=True)
             return "recording"
@@ -254,11 +240,7 @@ class DomoScenarioDevice:
         return "error"
 
     async def start_rename(self) -> str:
-        """Avvia il flusso di rinomina per lo scenario il cui nome e'
-        scritto nel text. Se valido, entra in stato 'rename_pending': la
-        prossima submit del text sara' interpretata come nuovo nome
-        invece che come nome scenario. Chiamato dal button 'Rinomina
-        scenario'."""
+        """Enter rename_pending for the scenario named in name_draft."""
         if self._registration_state == "recording":
             self._set_status_message("Registrazione in corso", transient=True)
             return "recording"
@@ -291,10 +273,7 @@ class DomoScenarioDevice:
         return "pending"
 
     async def submit_text_value(self, value: str) -> None:
-        """Punto di ingresso unico per il submit del text: se e' in corso
-        un rename (rename_pending), interpreta `value` come nuovo nome
-        (con o senza il prefisso 'Nuovo nome:'); altrimenti si comporta
-        come il normale set_name_draft."""
+        """Single text submit entry point: new name while renaming, else name draft."""
         if not self._rename_pending:
             self.set_name_draft(value)
             return
@@ -315,7 +294,8 @@ class DomoScenarioDevice:
         try:
             await self.rename_scenario(target_id, new_name)
             confirmed = await self.wait_for_user_action("rename")
-        except Exception:
+        except Exception as err:
+            _LOGGER.warning("Scenario rename failed: %s", err)
             confirmed = False
 
         await self._get_scenarios()
@@ -328,83 +308,33 @@ class DomoScenarioDevice:
             self._set_status_message("Errore durante la rinomina", transient=True)
 
     async def rename_scenario(self, scenario_id: int, name: str) -> None:
-        """Rinomina uno scenario esistente."""
+        """Rename an existing scenario."""
         self._arm_pending_action("rename")
         await self._gateway.tx_command({
             "cmd_name": "scenario_rename_req",
             "id": scenario_id,
             "name": name
-        }, resp_command=None)  # il gateway risponde con un generic_reply
+        }, resp_command=None)
 
         _LOGGER.debug("Renamed scenario %d to %s", scenario_id, name)
 
     async def wait_for_user_action(self, expected_action: str, timeout: float = 5.0) -> bool:
-        """Attende l'evento asincrono scenario_user_ind con l'azione attesa
-        (create/rename/delete), entro `timeout` secondi."""
+        """Wait up to `timeout` seconds for the scenario_user_ind event of `expected_action`."""
         if not (self._pending_action == expected_action and self._pending_action_event is not None):
-            # Non era stato armato in anticipo (caso raro): arma ora.
             self._pending_action = expected_action
             self._pending_action_event = asyncio.Event()
         event = self._pending_action_event
         try:
             await asyncio.wait_for(event.wait(), timeout=timeout)
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return False
         finally:
             self._pending_action = None
             self._pending_action_event = None
 
-    def _arm_pending_action(self, action: str) -> None:
-        """Predispone in anticipo l'attesa dell'evento scenario_user_ind per
-        `action`. Necessario perché il gateway può inviare la notifica
-        asincrona (es. 'create') non appena l'utente modifica qualcosa,
-        molto prima che venga premuto lo stop / chiamato wait_for_user_action:
-        senza armare subito l'evento, quella notifica verrebbe persa."""
-        self._pending_action = action
-        self._pending_action_event = asyncio.Event()
-
-    def _set_status_message(self, message: str, transient: bool = False) -> None:
-        """Aggiorna il messaggio del text di stato e notifica l'entità.
-        Se `transient`, il messaggio viene rimosso dopo 2 secondi."""
-        self._status_token += 1
-        my_token = self._status_token
-        self._status_message = message
-        self._notify_scenario_ui()
-        hass = self._gateway.hass
-
-        if transient and hass:
-            async def _revert():
-                await asyncio.sleep(2)
-                if my_token == self._status_token:
-                    self._status_message = None
-                    self._notify_scenario_ui()
-            hass.async_create_task(_revert())
-
-    def _notify_scenario_ui(self) -> None:
-        """Notifica il text del nome/stato e i due button di
-        avvio/stop registrazione (la loro availability dipende dallo
-        stato del device)."""
-        hass = self._gateway.hass
-        if not hass:
-            return
-        for uid in (
-            "domo_scenario_name_text",
-            "domo_scenario_start_registration_button",
-            "domo_scenario_stop_registration_button",
-        ):
-            async_dispatcher_send(hass, SIGNAL_UPDATE_ENTITY, uid)
-
-    def _notify_target_select(self) -> None:
-        hass = self._gateway.hass
-        if hass:
-            async_dispatcher_send(hass, SIGNAL_UPDATE_ENTITY, "domo_scenario_target_select")
-
     async def async_execute(self) -> str:
-        """Orchestratore invocato dal pulsante 'esegui': decide start/stop
-        registrazione oppure rename/delete in base allo stato corrente e al
-        contenuto correntemente impostato in name_draft/target_id."""
-
+        """Execute button orchestrator: start/stop recording, rename or delete."""
         if self._registration_state == "recording":
             name = self._name_draft
             ok = await self.stop_scenario_registration()
@@ -430,7 +360,9 @@ class DomoScenarioDevice:
                 return ""
             ok = await self.create_scenario(name)
             message = f"Registrazione in corso: {name}" if ok else "Errore avvio registrazione"
-            if not ok:
+            if ok:
+                self._notify_scenario_ui()
+            else:
                 self._set_status_message(message, transient=True)
             return message
 
@@ -449,54 +381,118 @@ class DomoScenarioDevice:
         self._target_id = None
         self._set_status_message(message, transient=True)
         self._notify_target_select()
-        return message        
+        return message
 
-async def discover_scenarios(gateway):
-    """Scopri il device scenari."""
+    def notify_user_action(self, action: str) -> None:
+        """Release the pending wait if `action` matches the armed one."""
+        if self._pending_action == action and self._pending_action_event is not None:
+            self._pending_action_event.set()
+
+    async def _get_scenarios(self) -> list[dict[str, Any]]:
+        """Fetch the scenarios list from the gateway and refresh the cache."""
+        resp = await self._gateway.tx_command({
+            "cmd_name": "scenarios_list_req"
+        }, resp_command="scenarios_list_resp")
+
+        if not resp:
+            _LOGGER.error("No response from gateway for scenarios list")
+            return []
+
+        scenarios = resp.get("array", [])
+        _LOGGER.debug("Retrieved %d scenarios", len(scenarios))
+        self._scenarios_cache = scenarios
+        return scenarios
+
+    def _arm_pending_action(self, action: str) -> None:
+        """Arm the scenario_user_ind wait early so the gateway notification is not lost."""
+        self._pending_action = action
+        self._pending_action_event = asyncio.Event()
+
+    def _set_status_message(self, message: str, transient: bool = False) -> None:
+        """Update the status text; a transient message is cleared after 2 seconds."""
+        self._status_token += 1
+        my_token = self._status_token
+        self._status_message = message
+        self._notify_scenario_ui()
+        hass = self._gateway.hass
+
+        if transient and hass:
+            async def _revert():
+                await asyncio.sleep(2)
+                if my_token == self._status_token:
+                    self._status_message = None
+                    self._notify_scenario_ui()
+            hass.async_create_task(_revert())
+
+    def _notify_scenario_ui(self) -> None:
+        """Refresh the name/status text and the start/stop registration buttons."""
+        hass = self._gateway.hass
+        if not hass:
+            return
+        for uid in (
+            "domo_scenario_name_text",
+            "domo_scenario_start_registration_button",
+            "domo_scenario_stop_registration_button",
+        ):
+            async_dispatcher_send(hass, SIGNAL_UPDATE_ENTITY, uid)
+
+    def _notify_target_select(self) -> None:
+        """Refresh the scenario target select."""
+        hass = self._gateway.hass
+        if hass:
+            async_dispatcher_send(hass, SIGNAL_UPDATE_ENTITY, "domo_scenario_target_select")
+
+
+# ============================================================
+# ===== DISCOVERY AND ACCESSORS =====
+# ============================================================
+
+async def discover_scenarios(gateway) -> list[DomoScenarioDevice]:
+    """Create the scenarios device."""
     _LOGGER.debug("Discovering scenarios device")
-    
+
     scenario_device = DomoScenarioDevice(gateway)
     _LOGGER.debug("Scenarios device created")
     return [scenario_device]
 
 
-def get_scenario_device():
-    """Restituisce il device scenari."""
+def get_scenario_device() -> DomoScenarioDevice | None:
+    """Return the scenarios device."""
     return _SCENARIO_DEVICE
 
 
-def handle_scenario_status_update(gateway, device_info):
-    """Gestisce aggiornamenti di stato degli scenari."""
+# ============================================================
+# ===== GATEWAY EVENT HANDLERS =====
+# ============================================================
+
+def handle_scenario_status_update(gateway, device_info) -> None:
+    """Handle scenario status and user-action events from the gateway."""
     cmd_name = device_info.get("cmd_name")
     if not cmd_name:
         return
-    
-    # Gestisci aggiornamento stato scenario
+
     if cmd_name == "scenario_status_ind":
         scenario_id = device_info.get("id")
-        _LOGGER.debug("Scenario status update for ID %d: %s", scenario_id, device_info)
-        
+        _LOGGER.debug("Scenario status update for ID %s: %s", scenario_id, device_info)
+
         if gateway and gateway.hass:
-            # Invia segnale per aggiornamento specifico scenario
             async_dispatcher_send(
                 gateway.hass,
                 "domo_scenario_update",
                 scenario_id,
                 device_info
             )
-            
-    # Gestisci creazione/modifica scenario da UI
+
     elif cmd_name == "scenario_user_ind":
         action = device_info.get("action")
         _LOGGER.debug("Scenario user action: %s", action)
 
         device = get_scenario_device()
-        if device and device._pending_action == action and device._pending_action_event:
-            device._pending_action_event.set()
+        if device:
+            device.notify_user_action(action)
 
         if action in ("add", "create", "rename", "delete"):
             if gateway and gateway.hass:
-                # Invia segnale per refresh lista scenari
                 async_dispatcher_send(
                     gateway.hass,
                     "domo_scenarios_refreshed"

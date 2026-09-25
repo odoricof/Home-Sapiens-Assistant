@@ -224,3 +224,25 @@ D'ora in poi è installabile con una semplice ricerca, senza configurazioni aggi
 
 ![loads](images/loads1.png)
 ![loads](images/loads2.png)
+
+## [2.0.0] - 2026-09-25
+
+> # 🌍 **HOME SAPIENS ASSISTANT È ORA MULTILINGUA!**
+>
+> L'integrazione ora parla **italiano, inglese, tedesco, spagnolo, francese e russo**.
+> Notifiche, stati e nomi delle entità seguono automaticamente la lingua configurata in Home Assistant.
+
+### 🚀 Features
+
+- Home Sapiens Assistant supporta ora **l'interfaccia multilingua**: notifiche, stati e nomi delle entità vengono mostrati nella lingua configurata su Home Assistant, con ricaduta automatica in inglese se la traduzione non è disponibile. Lingue attualmente supportate: **italiano, inglese, tedesco, spagnolo, francese, russo**.
+
+### 🐛 Bug Fixes
+
+- Risolto un bug per cui, dopo un'interruzione di corrente a ETI/Domo (con Home Assistant rimasto attivo su UPS), alcune entità potevano mostrare uno stato non allineato a quello reale finché non veniva effettuata un'azione manuale. Ora, al ritorno online del gateway, gli stati vengono automaticamente risincronizzati. Inoltre luci e attivazioni vengono reimpostate al valore precedente al black out.
+
+- Corretta la deprecazione del device registry in vista di Home Assistant 2027.8.0: sostituito via_device con via_device_id in number.py, sensor.py, switch.py, text.py, binary_sensor.py e climate.py; sostituito async_get_device con async_get_device_by_identifier in sensor.py, number.py, switch.py, text.py.
+
+### ⚠️ Breaking changes
+
+- Nomi entità, opzioni delle select e preset ora seguono la lingua di HA, con fallback in inglese. Le automazioni che usano le vecchie stringhe italiane vanno aggiornate se HA non è in italiano.
+- Aggiornamento da versioni vecchie: chi arriva da una versione precedente alla 1.8.0 deve prima installare la 1.8.0.

@@ -30,6 +30,7 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 
@@ -39,6 +40,7 @@ from .platforms.thermoregulation import (
     DomoThermostat,
     get_all_thermostats,
 )
+from .services.i18n import async_get_translated_strings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,7 +86,8 @@ class DomoClimateEntity(ClimateEntity):
         """Initialize the climate entity."""
         self.hass = hass
         self._thermostat = thermostat
-
+        self._i18n: dict[str, str] = {}
+        
         self._attr_unique_id = thermostat.unique_id
         self._attr_name = thermostat.name
         self._attr_should_poll = False
@@ -102,12 +105,15 @@ class DomoClimateEntity(ClimateEntity):
             | ClimateEntityFeature.PRESET_MODE
         )
 
+        climate_root_device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, f"{entry_id}_climate"), entry_id
+        )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_climate_{thermostat.unique_id}")},
             name=thermostat.name,
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
-            via_device=(DOMAIN, f"{entry_id}_climate"),
+            via_device_id=climate_root_device.id if climate_root_device else None,
         )
 
         _LOGGER.debug("Created climate entity: %s in room %s", self._attr_name, thermostat.room)
@@ -201,8 +207,8 @@ class DomoClimateEntity(ClimateEntity):
         """Return the list of available preset modes."""
         if self._thermostat.season == "plant_off":
             return []
-        return [current_weekday_name(), PRESET_JOLLY]
-
+        return [self._i18n.get(f"weekday_options.{current_weekday_name()}", current_weekday_name()), PRESET_JOLLY]
+        
     @property
     def preset_mode(self) -> str | None:
         """Return the current preset mode."""
@@ -210,7 +216,7 @@ class DomoClimateEntity(ClimateEntity):
             return None
         if self._thermostat.hvac_mode == "jolly":
             return PRESET_JOLLY
-        return current_weekday_name()
+        return self._i18n.get(f"weekday_options.{current_weekday_name()}", current_weekday_name())
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -259,6 +265,7 @@ class DomoClimateEntity(ClimateEntity):
 
     async def async_added_to_hass(self) -> None:
         """Run when the entity is added to Home Assistant."""
+        self._i18n = await async_get_translated_strings(self.hass, "thermoregulation_entities")
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,

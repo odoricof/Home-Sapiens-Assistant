@@ -1,5 +1,5 @@
 """
-domo/platforms/thermoregulation.py
+platforms/thermoregulation.py
 
 Entities fed by this file:
 - domo/climate.py : Thermostats
@@ -14,6 +14,8 @@ License: MIT
 This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
 Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
+
+status: passed
 """
 from __future__ import annotations
 from datetime import datetime
@@ -27,22 +29,29 @@ from ..const import SIGNAL_UPDATE_ENTITY
 _LOGGER = logging.getLogger(__name__)
 
 
-class ThermalProfileError(ValueError):
-    """Input utente non applicabile al profilo termico (slot sovrapposti o ambigui)."""
+# ============================================================
+# ===== EXCEPTIONS =====
+# ============================================================
 
-# Mappa delle modalità termostato
+class ThermalProfileError(ValueError):
+    """User input not applicable to the thermal profile (overlapping or ambiguous slots)."""
+
+
+# ============================================================
+# ===== CONSTANTS =====
+# ============================================================
+
 THERMO_MODES = {
     0: "off",
-    1: "manual",    
+    1: "manual",
     2: "auto",
     3: "jolly",
 }
 
-# Mappa giorno (tab app nativa)
 PROFILE_DAY_TO_ID = {
-    "Lunedì": 0, "Martedì": 1, "Mercoledì": 2, "Giovedì": 3,
-    "Venerdì": 4, "Sabato": 5, "Domenica": 6, "Jolly": 7,
-}
+    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+    "friday": 4, "saturday": 5, "sunday": 6, "jolly": 7,
+}    
 
 PROFILE_ID_TO_DAY = {v: k for k, v in PROFILE_DAY_TO_ID.items()}
 
@@ -61,41 +70,52 @@ SETPOINT_TO_PROFILE_CHAR = {"t1": "1", "t2": "3", "t3": "5"}
 QUARTER_MINUTES = 15
 
 ALGO_MODE_TO_PARAMS = {
-    "PROPORZIONALE-INTEGRALE 1": {"type": "P", "pi_set_in_use": 1},
-    "PROPORZIONALE-INTEGRALE 2": {"type": "P", "pi_set_in_use": 2},
-    "PROPORZIONALE-INTEGRALE 3": {"type": "P", "pi_set_in_use": 3},
-    "PROPORZIONALE-INTEGRALE 4": {"type": "P", "pi_set_in_use": 4},
-    "DIFFERENZIALE": {"type": "D"},
-}
+    "pi1": {"type": "P", "pi_set_in_use": 1},
+    "pi2": {"type": "P", "pi_set_in_use": 2},
+    "pi3": {"type": "P", "pi_set_in_use": 3},
+    "pi4": {"type": "P", "pi_set_in_use": 4},
+    "differential": {"type": "D"},
+ }
 
 _ALGO_PARAMS_TO_MODE = {
     (params["type"], params.get("pi_set_in_use")): name
     for name, params in ALGO_MODE_TO_PARAMS.items()
 }
-# Dizionario globale per tenere traccia di tutti i termostati
+
 _THERMOSTATS: dict[int, "DomoThermostat"] = {}
 
+
+# ============================================================
+# ===== TIME HELPERS =====
+# ============================================================
+
 def current_weekday_name() -> str:
-    """Nome del giorno corrente, stesso formato di PROFILE_DAY_TO_ID."""
+    """Current weekday name, same format as PROFILE_DAY_TO_ID."""
     return PROFILE_ID_TO_DAY[datetime.now().weekday()]
 
+
 def _slot_to_time_str(slot_index: int) -> str:
-    """Converte l'indice di quarto d'ora (0-95) in stringa HH:MM."""
+    """Converts a quarter-hour slot index (0-95) into an HH:MM string."""
     total_minutes = slot_index * QUARTER_MINUTES
     hour = (total_minutes // 60) % 24
     minute = total_minutes % 60
     return f"{hour:02d}:{minute:02d}"
-    
+
+
 def _time_str_to_slot(time_str: str) -> int:
-    """Converte una stringa HH:MM nell'indice di quarto d'ora (0-96)"""
+    """Converts an HH:MM string into a quarter-hour slot index (0-96)."""
     hour, minute = (int(x) for x in time_str.split(":"))
     total_minutes = hour * 60 + minute
     slot = round(total_minutes / QUARTER_MINUTES)
     return max(0, min(slot, 96))
-    
+
+
+# ============================================================
+# ===== PROFILE ENCODING / DECODING =====
+# ============================================================
 
 def _decode_profile_to_blocks(profile_data: str) -> List[tuple]:
-    """Decodifica una stringa profilo (96 caratteri) in blocchi contigui (start_slot, end_slot, char)."""
+    """Decodes a profile string (96 characters) into contiguous blocks (start_slot, end_slot, char)."""
     blocks: List[tuple] = []
     if not profile_data:
         return blocks
@@ -109,7 +129,7 @@ def _decode_profile_to_blocks(profile_data: str) -> List[tuple]:
 
 
 def _parse_schedule_blocks(schedule_str: str) -> List[tuple]:
-    """Effettua il parsing di 'HH:MM-HH:MM=tN,...' in una lista di (start_slot, end_slot, char)."""
+    """Parses 'HH:MM-HH:MM=tN,...' into a list of (start_slot, end_slot, char)."""
     blocks: List[tuple] = []
     for raw_block in schedule_str.split(","):
         raw_block = raw_block.strip()
@@ -130,12 +150,12 @@ def _parse_schedule_blocks(schedule_str: str) -> List[tuple]:
 
 
 def _overlap(a_start: int, a_end: int, b_start: int, b_end: int) -> int:
-    """Numero di quarti d'ora in comune fra due intervalli [a_start,a_end) e [b_start,b_end)."""
+    """Number of quarter-hours in common between two intervals [a_start,a_end) and [b_start,b_end)."""
     return max(0, min(a_end, b_end) - max(a_start, b_start))
 
 
 def _find_target_block_index(u_start: int, u_end: int, u_char: str, base_blocks: List[tuple]) -> int:
-    """Individua l'indice dello slot di base con la massima sovrapposizione con lo slot richiesto."""   
+    """Finds the index of the base slot with maximum overlap with the requested slot."""
     def _best(indexed_blocks):
         overlaps = [(_overlap(u_start, u_end, b[0], b[1]), idx) for idx, b in indexed_blocks]
         max_ov = max(ov for ov, _ in overlaps)
@@ -163,7 +183,7 @@ def _find_target_block_index(u_start: int, u_end: int, u_char: str, base_blocks:
 
 
 def _encode_without_base(blocks: List[tuple]) -> str:
-    """Comportamento legacy (nessun profilo di base disponibile): riempie i buchi con l'ultimo/primo carattere noto."""
+    """Legacy behavior (no base profile available): fills gaps with the last/first known character."""
     slots = [None] * 96
     for start, end, char in blocks:
         for i in range(start, end):
@@ -185,22 +205,18 @@ def _encode_without_base(blocks: List[tuple]) -> str:
 
 
 def encode_thermal_profile(schedule_str: str, base_profile_data: Optional[str] = None) -> str:
-    """Converte 'HH:MM-HH:MM=tN,...' nella stringa di 96 caratteri per thermo_zone_config_req.""" 
+    """Converts 'HH:MM-HH:MM=tN,...' into the 96-character string for thermo_zone_config_req."""
     user_blocks = _parse_schedule_blocks(schedule_str)
 
-    # Se non c'è base (prima scrittura), comportamento legacy: riempimento buchi.
     if not base_profile_data or len(base_profile_data) != 96:
         return _encode_without_base(user_blocks)
 
     base_blocks = _decode_profile_to_blocks(base_profile_data)
 
-    # Scarto gli slot dell'utente identici a quelli già presenti nella base: non sono modifiche
-    # reali (permette di inviare sia il profilo intero sia solo le righe cambiate).
     real_blocks = [b for b in user_blocks if b not in base_blocks]
     if not real_blocks:
         return base_profile_data
 
-    # Le modifiche realmente richieste non devono sovrapporsi fra loro.
     real_blocks_sorted = sorted(real_blocks, key=lambda b: b[0])
     for prev_block, curr_block in zip(real_blocks_sorted, real_blocks_sorted[1:]):
         if _overlap(prev_block[0], prev_block[1], curr_block[0], curr_block[1]) > 0:
@@ -211,18 +227,14 @@ def encode_thermal_profile(schedule_str: str, base_profile_data: Optional[str] =
         target_idx = _find_target_block_index(u_start, u_end, u_char, base_blocks)
         t_start, t_end, _t_char = base_blocks[target_idx]
 
-        # Applico l'intervallo/temperatura richiesti dall'utente (priorità assoluta).
         for i in range(u_start, u_end):
             slots[i] = u_char
 
-        # Lo slot precedente termina all'inizio del nuovo slot (recupera l'eventuale buco lasciato
-        # dal restringimento dello slot modificato).
         if u_start > t_start:
             prev_char = base_blocks[target_idx - 1][2] if target_idx > 0 else base_blocks[target_idx][2]
             for i in range(t_start, u_start):
                 slots[i] = prev_char
 
-        # Lo slot successivo inizia alla fine del nuovo slot.
         if u_end < t_end:
             next_char = base_blocks[target_idx + 1][2] if target_idx < len(base_blocks) - 1 else base_blocks[target_idx][2]
             for i in range(u_end, t_end):
@@ -230,17 +242,20 @@ def encode_thermal_profile(schedule_str: str, base_profile_data: Optional[str] =
 
     return "".join(slots)
 
+
 def decode_thermal_profile(profile_data: str, t1: Optional[int], t2: Optional[int], t3: Optional[int]) -> Dict[str, str]:
-    """Decodifica la stringa profilo (96 caratteri) in blocchi orari compressi (una riga per fascia)."""    
+    """Decodes the profile string (96 characters) into compressed time blocks (one line per band)."""
     if not profile_data:
         return {}
     setpoint_values = {"t1": t1, "t2": t2, "t3": t3}
+
     def _char_to_temp(ch: str):
         name = PROFILE_CHAR_TO_SETPOINT.get(ch)
         if name is None:
             return None, None
         temp_dec = setpoint_values.get(name)
         return name, (temp_dec / 10.0 if temp_dec is not None else None)
+
     blocks = {}
     current_name, current_temp, start = None, None, 0
     for i, ch in enumerate(profile_data):
@@ -257,8 +272,9 @@ def decode_thermal_profile(profile_data: str, t1: Optional[int], t2: Optional[in
         blocks[key] = f"{current_name} | {current_temp}°C"
     return blocks
 
+
 def decode_thermal_profile_to_schedule_str(profile_data: str) -> str:
-    """Decodifica la stringa profilo (96 caratteri) nel formato 'HH:MM-HH:MM=tN,...'."""    
+    """Decodes the profile string (96 characters) into 'HH:MM-HH:MM=tN,...' format."""
     if not profile_data:
         return ""
     blocks = []
@@ -275,31 +291,33 @@ def decode_thermal_profile_to_schedule_str(profile_data: str) -> str:
         blocks.append(f"{_slot_to_time_str(start)}-24:00={current_name}")
     return ",".join(blocks)
 
+
+# ============================================================
+# ===== THERMOSTAT DISCOVERY =====
+# ============================================================
+
 async def discover_thermostats(gateway):
-    """Scopri tutti i termostati disponibili."""
+    """Discovers all available thermostats."""
     _LOGGER.info("THERMOSTATS starting discovery")
-    
+
     try:
-        # Richiedi lista termostati
         resp = await gateway.tx_command({
             "cmd_name": "nested_thermo_list_req",
             "topologic_scope": "plant",
             "extended_infos": 2,
             "value": 0
         }, resp_command="thermo_list_resp")
-        
+
         if not resp:
             _LOGGER.error("THERMOSTATS discovery: no response")
             return None
-        
-        # Parsing della struttura annidata
+
         thermostats_found = []
         for zone in resp.get("array", []):
             zone_name = zone.get("name")
-            
+
             for thermo in zone.get("array", []):
                 if thermo.get("leaf"):
-                    # Crea oggetto DomoThermostat
                     thermo_obj = DomoThermostat(
                         gateway,
                         thermo,
@@ -308,32 +326,74 @@ async def discover_thermostats(gateway):
                     )
                     _THERMOSTATS[thermo.get("act_id")] = thermo_obj
                     thermostats_found.append(thermo_obj)
-        
+
         _LOGGER.info("THERMOSTATS discovered %d devices", len(thermostats_found))
         return thermostats_found
-        
+
     except Exception as err:
         _LOGGER.error("THERMOSTATS discovery failed: %s", err)
         return None
 
+
 def get_thermostat(act_id: int) -> Optional["DomoThermostat"]:
-    """Restituisce un oggetto termostato dal suo act_id."""
+    """Returns a thermostat object by its act_id."""
     return _THERMOSTATS.get(act_id)
 
 
 def get_all_thermostats() -> List["DomoThermostat"]:
-    """Restituisce tutti i termostati."""
+    """Returns all thermostats."""
     return list(_THERMOSTATS.values())
 
 
+async def refresh_all_thermostats(gateway):
+    """Resynchronizes the state of all cached thermostats after a gateway reconnect."""
+    _LOGGER.info("THERMOSTATS refreshing state after gateway reconnect")
+
+    try:
+        resp = await gateway.tx_command({
+            "cmd_name": "nested_thermo_list_req",
+            "topologic_scope": "plant",
+            "extended_infos": 2,
+            "value": 0
+        }, resp_command="thermo_list_resp")
+
+        if not resp:
+            _LOGGER.error("THERMOSTATS refresh: no response")
+            return
+
+        updated_count = 0
+        for zone in resp.get("array", []):
+            for thermo in zone.get("array", []):
+                if not thermo.get("leaf"):
+                    continue
+
+                act_id = thermo.get("act_id")
+                thermostat = _THERMOSTATS.get(act_id)
+                if thermostat is None:
+                    _LOGGER.warning("THERMOSTATS refresh: act_id %s not in cache, skipped", act_id)
+                    continue
+
+                if thermostat.update_state(thermo) and gateway.hass:
+                    async_dispatcher_send(gateway.hass, SIGNAL_UPDATE_ENTITY, thermostat.unique_id)
+                    updated_count += 1
+
+        _LOGGER.info("THERMOSTATS refresh completed: %d entities updated", updated_count)
+
+    except Exception as err:
+        _LOGGER.error("THERMOSTATS refresh failed: %s", err)
+
+
+# ============================================================
+# ===== DOMO THERMOSTAT =====
+# ============================================================
 
 class DomoThermostat:
+    """Represents a Domo thermostat and its gateway communication logic."""
 
     def __init__(self, gateway, thermo_data: Dict[str, Any], zone: str, room: str):
-        """Inizializza il termostato."""
+        """Initializes the thermostat."""
         self._gateway = gateway
-        
-        # Salva i dati direttamente
+
         self._act_id = thermo_data.get("act_id")
         self._name = thermo_data.get("name")
         self._mode = thermo_data.get("mode", 0)
@@ -342,11 +402,10 @@ class DomoThermostat:
         self._temperature = thermo_data.get("temp_dec")
         self._set_point = thermo_data.get("set_point")
         self._fan_speed = thermo_data.get("fan_speed")
-        
+
         self._zone = zone
         self._room = room
-        
-        # Dati aggiuntivi
+
         self._hygro = thermo_data.get("hygro")
         self._f3a_window_open = thermo_data.get("f3a", {}).get("window_open", 0) == 1
         self._f3a_presence = thermo_data.get("f3a", {}).get("presence", 0) == 1
@@ -359,54 +418,54 @@ class DomoThermostat:
         self._profile_draft_by_day: Dict[str, str] = {}
         self._profile_raw_by_day: Dict[int, str] = {}
         self._apply_profile_data_array(thermo_data.get("profile_data") or [])
-        self._apply_profile_info(thermo_data.get("profile_info", {}) or {}) 
-        
-        _LOGGER.debug("THERMOSTAT created: %s (ID: %d)", 
+        self._apply_profile_info(thermo_data.get("profile_info", {}) or {})
+
+        _LOGGER.debug("THERMOSTAT created: %s (ID: %d)",
                      self._name, self._act_id)
 
     @property
     def act_id(self) -> int:
-        """Restituisce l'ID attuatore."""
+        """Returns the actuator ID."""
         return self._act_id
 
     @property
     def name(self) -> str:
-        """Restituisce il nome del termostato."""
+        """Returns the thermostat name."""
         return self._name
 
     @property
     def unique_id(self) -> str:
-        """Restituisce l'ID univoco per HA."""
+        """Returns the unique ID for HA."""
         return f"climate.domo_{self.act_id}_{self.name.lower().replace(' ', '_')}"
 
     @property
     def gateway(self):
-        """Restituisce il gateway associato al termostato."""
+        """Returns the gateway associated with the thermostat."""
         return self._gateway
 
     @property
     def zone(self) -> str:
-        """Restituisce la zona."""
+        """Returns the zone."""
         return self._zone
-        
+
     @property
-    def room(self) -> str:  # <-- NUOVA PROPERTY
-        """Restituisce la stanza."""
-        return self._room        
+    def room(self) -> str:
+        """Returns the room."""
+        return self._room
 
     @property
     def current_temperature(self) -> float:
-        """Restituisce la temperatura corrente in °C, o None se non ancora nota."""
+        """Returns the current temperature in °C, or None if not yet known."""
         return self._temperature / 10.0 if self._temperature is not None else None
 
     @property
     def target_temperature(self) -> float:
-        """Restituisce la temperatura target in °C, o None se non ancora nota."""
+        """Returns the target temperature in °C, or None if not yet known."""
         return self._set_point / 10.0 if self._set_point is not None else None
 
     @property
     def current_humidity(self) -> Optional[float]:
-        """Restituisce l'umidità corrente se disponibile."""
+        """Returns the current humidity if available."""
         if self._hygro is not None:
             try:
                 return float(self._hygro)
@@ -417,16 +476,16 @@ class DomoThermostat:
 
     @property
     def hvac_mode(self) -> str:
-        """Restituisce la modalità HVAC corrente."""
+        """Returns the current HVAC mode."""
         return THERMO_MODES.get(self._mode, "off")
 
     @property
     def hvac_action(self) -> str:
-        """Restituisce l'azione corrente (heating/idle/off)."""
-        if self._mode == 0:  # Off
+        """Returns the current action (heating/idle/off)."""
+        if self._mode == 0:
             return "off"
-        
-        if self._status == 1:  # Richiesta attiva
+
+        if self._status == 1:
             if self._season == "winter":
                 return "heating"
             elif self._season == "summer":
@@ -435,14 +494,14 @@ class DomoThermostat:
 
     @property
     def status(self) -> str:
-        """Restituisce lo stato testuale (off/idle/active)."""
+        """Returns the textual status (off/idle/active)."""
         if self._mode == 0:
             return "off"
         return "active" if self._status == 1 else "idle"
 
     @property
     def fan_mode(self) -> Optional[str]:
-        """Restituisce la modalità ventola."""
+        """Returns the fan mode."""
         if self._fan_speed is None:
             return None
         fan_map = {1: "low", 2: "medium", 3: "high", 4: "auto"}
@@ -450,86 +509,92 @@ class DomoThermostat:
 
     @property
     def is_window_open(self) -> bool:
-        """Restituisce True se finestra aperta rilevata."""
+        """Returns True if an open window is detected."""
         return self._f3a_window_open
 
     @property
     def is_occupied(self) -> bool:
-        """Restituisce True se presenza rilevata."""
+        """Returns True if presence is detected."""
         return self._f3a_presence
-        
+
     @property
     def profile_data(self) -> Optional[str]:
-        """Restituisce la stringa grezza del profilo termico (96 caratteri) attualmente in vigore."""
-        if self._mode == 3:  # Jolly
-            jolly_id = PROFILE_DAY_TO_ID["Jolly"]
+        """Returns the raw thermal profile string (96 characters) currently in effect."""
+        if self._mode == 3:
+            jolly_id = PROFILE_DAY_TO_ID["jolly"]
             if jolly_id in self._profile_raw_by_day:
-                return self._profile_raw_by_day[jolly_id]        
+                return self._profile_raw_by_day[jolly_id]
         today_id = PROFILE_DAY_TO_ID[_WEEKDAY_ORDER[datetime.now().weekday()]]
         if today_id in self._profile_raw_by_day:
             return self._profile_raw_by_day[today_id]
         return self._profile_info.get("profile_data")
-        
+
     @property
     def thermal_profile_schedule(self) -> List[Dict[str, Any]]:
-        """Blocchi orari compressi decodificati dal profilo termico."""
-        return decode_thermal_profile(self.profile_data, self._t1, self._t2, self._t3)        
-        
+        """Compressed time blocks decoded from the thermal profile."""
+        return decode_thermal_profile(self.profile_data, self._t1, self._t2, self._t3)
+
     @property
     def t1(self) -> Optional[float]:
+        """Returns t1 setpoint in °C, or None if not yet known."""
         return self._t1 / 10.0 if self._t1 is not None else None
 
     @property
     def t2(self) -> Optional[float]:
+        """Returns t2 setpoint in °C, or None if not yet known."""
         return self._t2 / 10.0 if self._t2 is not None else None
 
     @property
     def t3(self) -> Optional[float]:
+        """Returns t3 setpoint in °C, or None if not yet known."""
         return self._t3 / 10.0 if self._t3 is not None else None
-        
+
     @property
     def antifreeze(self) -> Optional[float]:
+        """Returns the antifreeze setpoint in °C, or None if not yet known."""
         return self._antifreeze / 10.0 if self._antifreeze is not None else None
-        
+
     @property
     def season(self) -> str:
-        """Restituisce la stagione impostata (winter/summer/plant_off)."""
+        """Returns the configured season (winter/summer/plant_off)."""
         return self._season
 
     @property
     def t1_raw(self) -> Optional[int]:
-        """Valore t1 grezzo (decimi di grado), per backup/restore senza perdita di precisione."""
+        """Raw t1 value (tenths of a degree), for lossless backup/restore."""
         return self._t1
 
     @property
     def t2_raw(self) -> Optional[int]:
+        """Raw t2 value (tenths of a degree), for lossless backup/restore."""
         return self._t2
 
     @property
     def t3_raw(self) -> Optional[int]:
+        """Raw t3 value (tenths of a degree), for lossless backup/restore."""
         return self._t3
 
     @property
     def profile_raw_by_day(self) -> Dict[int, str]:
-        """Restituisce {profile_id: profile_data} dei profili grezzi noti (0-6=Lun..Dom, 7=Jolly)."""
-        return dict(self._profile_raw_by_day)        
-            
+        """Returns {profile_id: profile_data} for known raw profiles (0-6=Mon..Sun, 7=Jolly)."""
+        return dict(self._profile_raw_by_day)
+
     @property
     def algo_mode(self) -> Optional[str]:
-        """Restituisce la modalità algoritmo corrente"""
+        """Returns the current algorithm mode."""
         algo_type = self._thermo_algo.get("type")
         pi_set = self._thermo_algo.get("pi_set_in_use") if algo_type == "P" else None
         return _ALGO_PARAMS_TO_MODE.get((algo_type, pi_set))
 
     @property
     def diff_t_dec(self) -> Optional[float]:
-        """Restituisce il differenziale termico (°C) usato in modalità DIFF."""
+        """Returns the thermal differential (°C) used in DIFF mode."""
         value = self._thermo_algo.get("diff_t_dec")
-        return value / 10.0 if value is not None else None        
-        
+        return value / 10.0 if value is not None else None
+
     @property
     def scheduled_setpoint(self) -> Optional[float]:
-        """Restituisce il set-point (°C) attualmente in vigore secondo il profilo termico."""
+        """Returns the setpoint (°C) currently in effect according to the thermal profile."""
         profile_data = self.profile_data
         if not profile_data:
             return None
@@ -545,21 +610,35 @@ class DomoThermostat:
             return None
 
         setpoint_dec = getattr(self, f"_{setpoint_name}")
-        return setpoint_dec / 10.0 if setpoint_dec is not None else None        
-        
+        return setpoint_dec / 10.0 if setpoint_dec is not None else None
+
     @property
     def support_fan(self) -> bool:
-        """Restituisce True se supporta ventola."""
+        """Returns True if fan is supported."""
         return self._fan_speed is not None
 
+    @property
+    def selected_profile_day(self) -> str:
+        return self._selected_profile_day
+
+    @property
+    def profile_draft(self) -> str:
+        """Local draft (not read from gateway) for the currently selected day."""
+        return self._profile_draft_by_day.get(self._selected_profile_day, "")
+
+    def set_selected_profile_day(self, day: str) -> None:
+        if day not in PROFILE_DAY_TO_ID:
+            raise ValueError(f"Giorno non valido: {day}")
+        self._selected_profile_day = day
+
     async def async_set_hvac_mode(self, hvac_mode: str):
-        """Imposta la modalità HVAC."""
+        """Sets the HVAC mode."""
         if self._set_point is None:
-            _LOGGER.debug("THERMOSTAT %s: set_point non ancora noto, comando ignorato", self.name)
-            return False        
+            _LOGGER.debug("THERMOSTAT %s: set_point not yet known, command ignored", self.name)
+            return False
         mode_map = {v: k for k, v in THERMO_MODES.items()}
         mode_code = mode_map.get(hvac_mode, 0)
-        
+
         payload = {
             "cmd_name": "thermo_zone_config_req",
             "act_id": self._act_id,
@@ -567,14 +646,14 @@ class DomoThermostat:
             "set_point": self._set_point,
             "extended_infos": 0
         }
-        
+
         await self._gateway.tx_command(payload, resp_command=None)
         return True
 
     async def async_set_temperature(self, temperature: float):
-        """Imposta la temperatura target."""
+        """Sets the target temperature."""
         set_point = int(temperature * 10)
-        
+
         payload = {
             "cmd_name": "thermo_zone_config_req",
             "act_id": self._act_id,
@@ -582,12 +661,12 @@ class DomoThermostat:
             "set_point": set_point,
             "extended_infos": 0
         }
-        
+
         await self._gateway.tx_command(payload, resp_command=None)
         return True
 
     async def async_set_manual_temperature(self, temperature: float):
-        """Passa in manuale impostando contestualmente il set-point desiderato."""
+        """Switches to manual mode while setting the desired setpoint."""
         set_point = int(temperature * 10)
 
         payload = {
@@ -599,13 +678,13 @@ class DomoThermostat:
         }
 
         await self._gateway.tx_command(payload, resp_command=None)
-        return True 
+        return True
 
     async def async_set_fan_mode(self, fan_mode: str):
-        """Imposta la modalità ventola."""
+        """Sets the fan mode."""
         fan_map = {"low": 1, "medium": 2, "high": 3, "auto": 4}
         fan_speed = fan_map.get(fan_mode, 4)
-        
+
         payload = {
             "cmd_name": "thermo_zone_config_req",
             "act_id": self._act_id,
@@ -614,28 +693,14 @@ class DomoThermostat:
             "extended_infos": 1,
             "fan_speed": fan_speed
         }
-        
+
         await self._gateway.tx_command(payload, resp_command=None)
         return True
 
-    @property
-    def selected_profile_day(self) -> str:
-        return self._selected_profile_day
-
-    def set_selected_profile_day(self, day: str) -> None:
-        if day not in PROFILE_DAY_TO_ID:
-            raise ValueError(f"Giorno non valido: {day}")
-        self._selected_profile_day = day
-
-    @property
-    def profile_draft(self) -> str:
-        """Bozza locale (non letta dal gateway) per il giorno correntemente selezionato."""
-        return self._profile_draft_by_day.get(self._selected_profile_day, "")
-
     async def async_set_thermal_profile(self, schedule_str: str) -> bool:
-        """Scrive il profilo termico del giorno correntemente selezionato."""
+        """Writes the thermal profile for the currently selected day."""
         if self._set_point is None:
-            _LOGGER.debug("THERMOSTAT %s: set_point non ancora noto, comando ignorato", self.name)
+            _LOGGER.debug("THERMOSTAT %s: set_point not yet known, command ignored", self.name)
             return False
         profile_id = PROFILE_DAY_TO_ID[self._selected_profile_day]
         base_profile_data = self._profile_raw_by_day.get(profile_id)
@@ -643,12 +708,12 @@ class DomoThermostat:
             profile_data = encode_thermal_profile(schedule_str, base_profile_data=base_profile_data)
         except ThermalProfileError as err:
             _LOGGER.warning(
-                "THERMOSTAT %s: input profilo non valido (giorno=%s, input=%r): %s",
+                "THERMOSTAT %s: invalid profile input (day=%s, input=%r): %s",
                 self.act_id, self._selected_profile_day, schedule_str, err,
             )
             raise
         _LOGGER.debug(
-            "📈THERMOSTAT %s: profilo giorno=%s base=%r input=%r -> profile_data=%r",
+            "THERMOSTAT %s: profile day=%s base=%r input=%r -> profile_data=%r",
             self.act_id, self._selected_profile_day, base_profile_data, schedule_str, profile_data,
         )
         payload = {
@@ -664,13 +729,13 @@ class DomoThermostat:
         self._profile_draft_by_day[self._selected_profile_day] = decode_thermal_profile_to_schedule_str(profile_data)
         self._profile_raw_by_day[profile_id] = profile_data
         return True
-       
+
     async def async_set_thermal_profile_value(self, attr_key: str, value: float) -> bool:
-        """Imposta uno dei valori di profilo termico (t1/t2/t3/antifreeze)"""
+        """Sets one of the thermal profile values (t1/t2/t3/antifreeze)."""
         if attr_key not in ("t1", "t2", "t3", "antifreeze"):
             raise ValueError(f"attr_key non valido: {attr_key}")
         if self._set_point is None:
-            _LOGGER.debug("THERMOSTAT %s: set_point non ancora noto, comando ignorato", self.name)
+            _LOGGER.debug("THERMOSTAT %s: set_point not yet known, command ignored", self.name)
             return False
 
         values = {
@@ -683,7 +748,7 @@ class DomoThermostat:
 
         if any(v is None for v in values.values()) or not self._thermo_algo:
             _LOGGER.debug(
-                "THERMOSTAT %s: profilo termico non ancora completo (%s, thermo_algo=%s), comando ignorato",
+                "THERMOSTAT %s: thermal profile not yet complete (%s, thermo_algo=%s), command ignored",
                 self.name, values, self._thermo_algo,
             )
             return False
@@ -702,12 +767,12 @@ class DomoThermostat:
         }
 
         await self._gateway.tx_command(payload, resp_command=None)
-        return True        
+        return True
 
     async def async_write_raw_profile(self, profile_id: int, profile_data: str) -> bool:
-        """Scrive una stringa profilo (96 caratteri) già codificata, senza merge con la base."""
+        """Writes an already-encoded profile string (96 characters), without merging with the base."""
         if self._set_point is None:
-            _LOGGER.debug("THERMOSTAT %s: set_point non ancora noto, comando ignorato", self.name)
+            _LOGGER.debug("THERMOSTAT %s: set_point not yet known, command ignored", self.name)
             return False
         payload = {
             "cmd_name": "thermo_zone_config_req",
@@ -726,17 +791,17 @@ class DomoThermostat:
         return True
 
     async def async_set_algo_mode(self, mode: str) -> bool:
-        """Imposta la modalità dell'algoritmo di regolazione (PI1/PI2/PI3/PI4/DIFF)"""
+        """Sets the regulation algorithm mode (PI1/PI2/PI3/PI4/DIFF)."""
         if mode not in ALGO_MODE_TO_PARAMS:
             raise ValueError(f"algo_mode non valido: {mode}")
         if self._set_point is None:
-            _LOGGER.debug("THERMOSTAT %s: set_point non ancora noto, comando ignorato", self.name)
+            _LOGGER.debug("THERMOSTAT %s: set_point not yet known, command ignored", self.name)
             return False
 
         values = {"t1": self._t1, "t2": self._t2, "t3": self._t3, "antifreeze": self._antifreeze}
         if any(v is None for v in values.values()) or not self._thermo_algo:
             _LOGGER.debug(
-                "THERMOSTAT %s: profilo termico non ancora completo (%s, thermo_algo=%s), comando ignorato",
+                "THERMOSTAT %s: thermal profile not yet complete (%s, thermo_algo=%s), command ignored",
                 self.name, values, self._thermo_algo,
             )
             return False
@@ -762,15 +827,15 @@ class DomoThermostat:
         return True
 
     async def async_set_diff_t_dec(self, value: float) -> bool:
-        """Imposta il differenziale termico (°C, 0.1-2.0) usato in modalità DIFF"""
+        """Sets the thermal differential (°C, 0.1-2.0) used in DIFF mode."""
         if self._set_point is None:
-            _LOGGER.debug("THERMOSTAT %s: set_point non ancora noto, comando ignorato", self.name)
+            _LOGGER.debug("THERMOSTAT %s: set_point not yet known, command ignored", self.name)
             return False
 
         values = {"t1": self._t1, "t2": self._t2, "t3": self._t3, "antifreeze": self._antifreeze}
         if any(v is None for v in values.values()) or not self._thermo_algo:
             _LOGGER.debug(
-                "THERMOSTAT %s: profilo termico non ancora completo (%s, thermo_algo=%s), comando ignorato",
+                "THERMOSTAT %s: thermal profile not yet complete (%s, thermo_algo=%s), command ignored",
                 self.name, values, self._thermo_algo,
             )
             return False
@@ -792,24 +857,24 @@ class DomoThermostat:
         }
 
         await self._gateway.tx_command(payload, resp_command=None)
-        return True        
+        return True
 
     def _apply_profile_info(self, profile_info: Dict[str, Any]) -> None:
-            """Aggiorna profile_info, giorno selezionato e bozza."""
-            self._profile_info = profile_info
-            active_day = PROFILE_ID_TO_DAY.get(profile_info.get("profile_id"))
-            if active_day is None:
-                return
-            self._selected_profile_day = active_day
-            profile_data = profile_info.get("profile_data")
-            if profile_data:
-                self._profile_draft_by_day[active_day] = decode_thermal_profile_to_schedule_str(profile_data)
-                profile_id = profile_info.get("profile_id")
-                if profile_id is not None:
-                    self._profile_raw_by_day[profile_id] = profile_data
-                    
+        """Updates profile_info, selected day, and draft."""
+        self._profile_info = profile_info
+        active_day = PROFILE_ID_TO_DAY.get(profile_info.get("profile_id"))
+        if active_day is None:
+            return
+        self._selected_profile_day = active_day
+        profile_data = profile_info.get("profile_data")
+        if profile_data:
+            self._profile_draft_by_day[active_day] = decode_thermal_profile_to_schedule_str(profile_data)
+            profile_id = profile_info.get("profile_id")
+            if profile_id is not None:
+                self._profile_raw_by_day[profile_id] = profile_data
+
     def _apply_profile_data_array(self, profile_data_array: List[str]) -> None:
-        """Popola tutti i giorni (0-7: Lun...Dom, Jolly)"""
+        """Populates all days (0-7: Mon...Sun, Jolly)."""
         for day_id, raw in enumerate(profile_data_array):
             day_name = PROFILE_ID_TO_DAY.get(day_id)
             if day_name is None:
@@ -817,12 +882,11 @@ class DomoThermostat:
             self._profile_raw_by_day[day_id] = raw
             self._profile_draft_by_day[day_name] = decode_thermal_profile_to_schedule_str(raw)
 
-
     def update_state(self, data: Dict[str, Any]):
-        """Aggiorna lo stato in base ai dati ricevuti."""
+        """Updates the state based on received data."""
         if data.get("act_id") != self.act_id:
             return False
-        
+
         if "mode" in data:
             self._mode = data.get("mode")
         if "status" in data:
@@ -840,7 +904,7 @@ class DomoThermostat:
         if "hygro" in data:
             hygro = data.get("hygro")
             if hygro is not None and 0 <= hygro <= 100:
-                self._hygro = hygro       
+                self._hygro = hygro
         if "f3a" in data:
             f3a = data["f3a"]
             self._f3a_window_open = f3a.get("window_open", 0) == 1
@@ -852,18 +916,22 @@ class DomoThermostat:
         if "t2" in data:
             self._t2 = data.get("t2")
         if "t3" in data:
-            self._t3 = data.get("t3")  
+            self._t3 = data.get("t3")
         if "antifreeze" in data:
             self._antifreeze = data.get("antifreeze")
         if "thermo_algo" in data:
-            self._thermo_algo = data.get("thermo_algo") or self._thermo_algo            
-                
-        _LOGGER.debug("🌡️Thermostat %s state updated", self.name)
+            self._thermo_algo = data.get("thermo_algo") or self._thermo_algo
+
+        _LOGGER.debug("Thermostat %s state updated", self.name)
         return True
 
 
+# ============================================================
+# ===== STATE UPDATE HANDLER =====
+# ============================================================
+
 def handle_thermostat_status_update(gateway, device_info: Dict[str, Any]) -> bool:
-    """Gestisce gli aggiornamenti di stato dei termostati."""
+    """Handles thermostat status updates."""
 
     act_id = device_info.get("act_id")
     if not act_id:

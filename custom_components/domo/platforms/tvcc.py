@@ -1,6 +1,9 @@
 """
 platforms/tvcc.py
 
+Entities fed by this file:
+- domo/camera.py : TVCC camera entities built from the discovered DomoTVCamera objects
+
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
 License: MIT
@@ -8,26 +11,33 @@ License: MIT
 This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
 Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
+
+status: passed
 """
 from __future__ import annotations
 
 import logging
-from typing import Dict, Any, List, Optional
-
-from homeassistant.helpers.dispatcher import async_dispatcher_send
-
-from ..const import SIGNAL_UPDATE_ENTITY
+from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# ============================================================
+# ===== CAMERA REGISTRY =====
+# ============================================================
 
 _TVCC_CAMERAS: dict[int, DomoTVCamera] = {}
 
 
-class DomoTVCamera:
-    """Telecamera TVCC ETI Domo."""
+# ============================================================
+# ===== CAMERA MODEL =====
+# ============================================================
 
-    def __init__(self, gateway, camera_data: Dict[str, Any]):
-        """Inizializza una telecamera."""
+class DomoTVCamera:
+    """ETI Domo TVCC camera."""
+
+    def __init__(self, gateway, camera_data: dict[str, Any]):
+        """Initialize a camera."""
         self._gateway = gateway
         self._camera_id = camera_data["id"]
         self._name = camera_data.get("name", f"Camera {self._camera_id}")
@@ -38,11 +48,15 @@ class DomoTVCamera:
         self._proxy1 = camera_data.get("proxy1")
         self._proxy2 = camera_data.get("proxy2")
         self._proxy_still = camera_data.get("proxy_still")
-        
+
         _TVCC_CAMERAS[self._camera_id] = self
-        
-        _LOGGER.debug("TVCC CAMERA created: %s (ID: %d) - stream_type: %s", 
-                     self._name, self._camera_id, self._stream_type)
+
+        _LOGGER.debug(
+            "TVCC camera created: %s (ID: %d) - stream_type: %s",
+            self._name,
+            self._camera_id,
+            self._stream_type,
+        )
 
     @property
     def camera_id(self) -> int:
@@ -85,38 +99,45 @@ class DomoTVCamera:
         return self._proxy_still
 
 
-async def discover_tvcc_cameras(gateway):
-    """Scopri tutte le telecamere TVCC disponibili."""
+# ============================================================
+# ===== DISCOVERY AND LOOKUP =====
+# ============================================================
+
+async def discover_tvcc_cameras(gateway) -> list[DomoTVCamera]:
+    """Discover all available TVCC cameras."""
     _LOGGER.debug("Discovering TVCC cameras")
-    
+
     try:
-        resp = await gateway.tx_command({
-            "cmd_name": "tvcc_cameras_list_req",
-            "username": "admin"
-        }, resp_command="tvcc_cameras_list_resp")
-        
+        resp = await gateway.tx_command(
+            {
+                "cmd_name": "tvcc_cameras_list_req",
+                "username": "admin",
+            },
+            resp_command="tvcc_cameras_list_resp",
+        )
+
         if not resp:
             _LOGGER.error("No response from gateway")
             return []
-        
+
         cameras = []
         for item in resp.get("array", []):
             camera = DomoTVCamera(gateway, item)
             cameras.append(camera)
-        
+
         _LOGGER.debug("Discovered %d TVCC cameras", len(cameras))
         return cameras
-        
+
     except Exception as err:
         _LOGGER.error("TVCC cameras discovery failed: %s", err)
         return []
 
 
-def get_all_tvcc_cameras() -> List[DomoTVCamera]:
-    """Restituisce tutte le telecamere TVCC."""
+def get_all_tvcc_cameras() -> list[DomoTVCamera]:
+    """Return all TVCC cameras."""
     return list(_TVCC_CAMERAS.values())
 
 
-def get_tvcc_camera(camera_id: int) -> Optional[DomoTVCamera]:
-    """Restituisce una telecamera per ID."""
+def get_tvcc_camera(camera_id: int) -> DomoTVCamera | None:
+    """Return a camera by ID."""
     return _TVCC_CAMERAS.get(camera_id)

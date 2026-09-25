@@ -101,7 +101,7 @@ class DomoCoverEntity(CoverEntity):
     @property
     def is_closed(self) -> bool:
         """Return True if the cover is closed."""
-        if self._opening.is_closed:
+        if self._opening.is_closed is None:
             if self._last_movement == 'opening':
                 return False
             elif self._last_movement == 'closing':

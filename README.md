@@ -1,53 +1,83 @@
-### 🌐 Language / Lingua
-- [English](README.md) | [Italiano](README.it.md)
-
----
-
 [![Current release](https://img.shields.io/github/release/odoricof/Home-Sapiens-Assistant.svg?style=plastic&label=Current%20release)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=plastic)](https://github.com/odoricof/Home-Sapiens-Assistant)  
 [![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![Buy me a beer 🍺🍺🍺](https://img.shields.io/badge/PayPal-Buy%20me%20a%20beer%20🍺🍺🍺-blue?style=plastic&logo=paypal)](https://paypal.me/odoricof)
 
+
 <img src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo@2x.png" width="96" alt="">
 
 # Home Sapiens Assistant
 ---
-Custom integration for **Home Assistant** to interface with **Bpt Home Automation / CAME Domotic 3.0 (Systems based of ETI/DOMO server)** via the Home Sapiens web interface.
+**Multilingual Custom integration** for **Home Assistant** to interface with **Bpt Home Automation / CAME Domotic 3.0 (Systems based of ETI/DOMO server)** through the Home Sapiens web interface.
 
 ---
+### 🌍 Languages translations
 
+| 🇮🇹 Italian | 🇬🇧 English | 🇪🇸 Spanish | 🇫🇷 French | 🇩🇪 German | 🇷🇺 Russian |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+
+- README Version: [English](README.md) | [Italiano](README.it.md)
+---
 ## Features
-### (For more details, see the [Changelog](https://github.com/odoricof/Home-Sapiens-Assistant/blob/main/Changelog.md))
+
 This integration allows Home Assistant to monitor and control a Bpt Home Automation / CAME Domotic system.
 
 Currently supported:
 
 - Activations
-- Analogic inputs
+   - On/Off
+   - Icon catalog
+   
+- Analog inputs
+   - Value and unit of measurement
+   - Appropriate icons based on the measured quantity
+   
 - Climate control
+   - Thermostats
    - Fan coils
-   - Thermal Profile Management
-   - Full support for all read and write functions
+   - Thermal profile management
+   - Copy/paste thermal profiles
+   - Exposure and management of all configurable parameters
+
 - Digital inputs
+   - Value exposure
+   
 - Irrigation
-   - Full support for all read and write functions
+   - Full replication of all functions exposed for reading and writing
+   
 - Energy meters
-- Fan coils
+   - Energy produced / consumed as exposed by the system
+
 - Intrusion alarm panel
    - Areas
    - Inputs
    - Outputs
    - Scenarios
-   - Trigger and warnings notifications
-   - Silencing
-   - Reset event memory
+   - Trigger and alarm notifications
+   - Siren silencing
+   - Event memory deletion
+   
 - Lights
-- Loads control
-   - Full support for all read and write functions
+   - On/Off
+   - Dimmers
+   - RGB
+   
+- Load control
+   - Full replication of all functions exposed for reading and writing
+   
 - Openings
-- Scenes
-- Schedule
-- TVCC
+   - Shutters / Awnings
+   
+- Scenarios
+   - Activation
+   - Recording
+   - Exposed states: on, off, transitioning
+   
+- Scheduling
+   - Full management of the 4 programmable time slots
+   
+- CCTV
+   - Video streams exposed as camera entities
 
 Additional Services:
 

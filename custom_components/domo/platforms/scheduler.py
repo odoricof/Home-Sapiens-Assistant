@@ -1,6 +1,10 @@
 """
 platforms/scheduler.py
 
+Entities fed by this file:
+- domo/text.py : timer name/timetable text entities (via DomoTimer, async_set_timer_timetable)
+- domo/switch.py : timer enable and per-day switches (via async_set_timer_enabled, async_set_timer_day)
+
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
 License: MIT
@@ -8,33 +12,39 @@ License: MIT
 This file is part of the Home-Sapiens-Assistant integration for Home Assistant.
 Report any bugs or feature requests via GitHub Issues:
 https://github.com/odoricof/Home-Sapiens-Assistant/issues
+
+status: passed
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from ..const import DOMAIN, SIGNAL_DISCOVERY_NEW, SIGNAL_UPDATE_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
+
+# ============================================================
+# ===== TIMER MODEL =====
+# ============================================================
+
 WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
-_TIMERS: Dict[int, "DomoTimer"] = {}
+_TIMERS: dict[int, DomoTimer] = {}
 
 
-def _decode_days(days: int) -> List[str]:
-    """Decodifica la bitmask 'days' nei giorni della settimana attivi."""
+def _decode_days(days: int) -> list[str]:
+    """Decode the 'days' bitmask into the active weekdays."""
     return [WEEKDAYS[i] for i in range(7) if days & (1 << i)]
 
 
 class DomoTimer:
-    """Temporizzatore ETI Domo / CAME Domotic (feature 'timer')."""
+    """ETI Domo / CAME Domotic timer ('timer' feature)."""
 
-    def __init__(self, gateway, data: Dict[str, Any]):
+    def __init__(self, gateway, data: dict[str, Any]):
         self._gateway = gateway
         self._id = data["id"]
         self._name = data.get("name", f"Timer {self._id}")
@@ -50,9 +60,6 @@ class DomoTimer:
             self._id, self._name, self._enabled, self._days, self._bars, self._timetable,
         )
 
-    # --------------------------------------------------
-    # PROPRIETA'
-    # --------------------------------------------------
     @property
     def timer_id(self) -> int:
         return self._id
@@ -78,7 +85,7 @@ class DomoTimer:
         return self._days
 
     @property
-    def active_weekdays(self) -> List[str]:
+    def active_weekdays(self) -> list[str]:
         return _decode_days(self._days)
 
     @property
@@ -86,25 +93,25 @@ class DomoTimer:
         return self._bars
 
     @property
-    def timetable(self) -> List[dict]:
+    def timetable(self) -> list[dict]:
         return self._timetable
 
-    def get_slot(self, index: int) -> Optional[dict]:
-        """Restituisce lo slot orario con il dato index, o None se non configurato."""
+    def get_slot(self, index: int) -> dict | None:
+        """Return the time slot with the given index, or None if not configured."""
         for slot in self._timetable:
             if slot.get("index") == index:
                 return slot
         return None
 
     def is_slot_active(self, index: int) -> bool:
-        """True se l'orario corrente rientra nel range dello slot (campo 'active' del gateway)."""
+        """Return True if the current time is within the slot range ('active' gateway field)."""
         slot = self.get_slot(index)
         if slot is None:
             return False
         return bool(slot.get("active"))
 
-    def weekly_schedule(self) -> Dict[str, List[Dict[str, str]]]:
-        """Ricostruisce lo schema settimanale {giorno: [{from, to}, ...]}."""
+    def weekly_schedule(self) -> dict[str, list[dict[str, str]]]:
+        """Rebuild the weekly schedule {day: [{from, to}, ...]}."""
         ranges = []
         for slot in self._timetable:
             start = slot.get("start", {}) or {}
@@ -123,11 +130,8 @@ class DomoTimer:
         active_days = set(self.active_weekdays)
         return {day: (ranges if day in active_days else []) for day in WEEKDAYS}
 
-    # --------------------------------------------------
-    # UPDATE
-    # --------------------------------------------------
-    def update(self, data: Dict[str, Any]) -> bool:
-        """Aggiorna il temporizzatore con i nuovi dati ricevuti dal bus."""
+    def update(self, data: dict[str, Any]) -> bool:
+        """Update the timer with new data received from the bus."""
         if data.get("id") != self._id:
             return False
 
@@ -152,27 +156,28 @@ class DomoTimer:
                 "SCHEDULER timer updated | id=%s name=%s enabled=%s days=%s timetable=%s",
                 self._id, self._name, self._enabled, self._days, self._timetable,
             )
-        return True
+        return changed
 
 
 # ============================================================
-# DISCOVERY
+# ===== DISCOVERY =====
 # ============================================================
-async def discover_timers(gateway):
-    """Prova a scoprire i temporizzatori esistenti con una richiesta di lista."""
-    _LOGGER.debug("SCHEDULER discovery timer (best-effort)")
+
+async def discover_timers(gateway) -> list[DomoTimer]:
+    """Try to discover existing timers with a list request."""
+    _LOGGER.debug("SCHEDULER timer discovery (best-effort)")
 
     try:
         resp = await gateway.tx_command(
             {"cmd_name": "timers_list_req"}, resp_command=None
         )
     except Exception as err:
-        _LOGGER.debug("SCHEDULER discovery fallita (non bloccante): %s", err)
+        _LOGGER.debug("SCHEDULER discovery failed (non-blocking): %s", err)
         return []
 
     if not resp or "array" not in resp:
         _LOGGER.debug(
-            "SCHEDULER: nessuna lista timer disponibile, verranno scoperti passivamente"
+            "SCHEDULER: no timer list available, timers will be discovered passively"
         )
         return []
 
@@ -191,19 +196,56 @@ async def discover_timers(gateway):
     return timers
 
 
-def get_all_timers() -> List["DomoTimer"]:
+async def refresh_all_timers(gateway) -> None:
+    """Resynchronize the state of all cached timers after a gateway reconnect."""
+    _LOGGER.debug("SCHEDULER refresh_all_timers")
+
+    try:
+        resp = await gateway.tx_command(
+            {"cmd_name": "timers_list_req"}, resp_command=None
+        )
+    except Exception as err:
+        _LOGGER.debug("SCHEDULER refresh failed (non-blocking): %s", err)
+        return
+
+    if not resp or "array" not in resp:
+        _LOGGER.debug("SCHEDULER refresh: no timer list available")
+        return
+
+    updated = 0
+    for item in resp.get("array", []):
+        timer_id = item.get("id")
+        if timer_id is None:
+            continue
+
+        timer = _TIMERS.get(timer_id)
+        if timer is None:
+            _LOGGER.warning(
+                "SCHEDULER refresh: timer id=%s not in cache, ignored", timer_id
+            )
+            continue
+
+        if timer.update(item) and gateway and gateway.hass:
+            async_dispatcher_send(gateway.hass, SIGNAL_UPDATE_ENTITY)
+            updated += 1
+
+    _LOGGER.info("SCHEDULER refresh_all_timers: %d timer(s) updated", updated)
+
+
+def get_all_timers() -> list[DomoTimer]:
     return list(_TIMERS.values())
 
 
-def get_timer(timer_id: int) -> Optional["DomoTimer"]:
+def get_timer(timer_id: int) -> DomoTimer | None:
     return _TIMERS.get(timer_id)
 
 
 # ============================================================
-# HANDLER BUS
+# ===== BUS HANDLER =====
 # ============================================================
-def handle_timer_status_update(gateway, device_info: Dict[str, Any]) -> bool:
-    """Punto unico di ingresso per i pacchetti 'timer_info_ind' dal gateway."""
+
+def handle_timer_status_update(gateway, device_info: dict[str, Any]) -> bool:
+    """Single entry point for 'timer_info_ind' packets from the gateway."""
     cmd = device_info.get("cmd_name")
     if cmd != "timer_info_ind":
         return False
@@ -233,10 +275,11 @@ def handle_timer_status_update(gateway, device_info: Dict[str, Any]) -> bool:
 
 
 # ============================================================
-# FUNZIONI DI COMANDO
+# ===== COMMAND FUNCTIONS =====
 # ============================================================
+
 async def async_set_timer_enabled(timer_id: int, value: int, gateway) -> None:
-    """Abilita/disabilita un timer."""
+    """Enable/disable a timer."""
     await gateway.tx_command(
         {"cmd_name": "timers_enable_req", "id": timer_id, "value": value},
         resp_command=None,
@@ -244,7 +287,7 @@ async def async_set_timer_enabled(timer_id: int, value: int, gateway) -> None:
 
 
 async def async_set_timer_day(timer_id: int, day_index: int, value: int, gateway) -> None:
-    """Abilita/disabilita un singolo giorno per un timer."""
+    """Enable/disable a single day for a timer."""
     await gateway.tx_command(
         {
             "cmd_name": "timers_enable_day_req",
@@ -256,8 +299,8 @@ async def async_set_timer_day(timer_id: int, day_index: int, value: int, gateway
     )
 
 
-async def async_set_timer_timetable(timer_id: int, timetable: List[dict], gateway) -> None:
-    """Imposta la tabella oraria completa di un timer."""
+async def async_set_timer_timetable(timer_id: int, timetable: list[dict], gateway) -> None:
+    """Set the full timetable of a timer."""
     await gateway.tx_command(
         {"cmd_name": "timers_set_req", "id": timer_id, "timetable": timetable},
         resp_command=None,

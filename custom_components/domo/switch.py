@@ -25,10 +25,12 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN, SIGNAL_DISCOVERY_NEW, SIGNAL_UPDATE_ENTITY
+from .services.i18n import async_get_translated_strings
 from .platforms.activations import DomoActivation, get_all_activations
 from .platforms.irrigation import (
     DomoIrrigationZone,
@@ -150,7 +152,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         if relay.relay_id in loadsctrl_added_ids:
             return
         loadsctrl_added_ids.add(relay.relay_id)
-        async_add_entities([DomoLoadCtrlRelaySwitch(relay)])
+        async_add_entities([DomoLoadCtrlRelaySwitch(hass, relay, entry.entry_id)])
         _LOGGER.info(
             "Added switch entity for load control relay id=%s (%s)",
             relay.relay_id, relay.name,
@@ -290,7 +292,6 @@ class DomoTimerEnabledSwitch(SwitchEntity):
     def __init__(self, timer: DomoTimer, entry_id: str):
         self._timer = timer
         self._attr_unique_id = f"domo_timer_{timer.timer_id}_enabled"
-        self._attr_name = "Abilitazione"
         self._attr_icon = "mdi:calendar-check"
         self._attr_device_info = _timer_device_info(timer, entry_id)
 
@@ -311,6 +312,8 @@ class DomoTimerEnabledSwitch(SwitchEntity):
             raise HomeAssistantError(f"Error sending timers_enable_req: {err}") from err
 
     async def async_added_to_hass(self):
+        i18n = await async_get_translated_strings(self.hass, "scheduler_entities")
+        self._attr_name = i18n.get("entity_names.enabled", "Enabled")
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -331,7 +334,6 @@ class DomoTimerWeekdaySwitch(SwitchEntity):
         self._timer = timer
         self._weekday = weekday
         self._attr_unique_id = f"domo_timer_{timer.timer_id}_day_{weekday}"
-        self._attr_name = _WEEKDAY_LABELS[weekday]
         self._attr_icon = "mdi:calendar-week"
         self._attr_device_info = _timer_device_info(timer, entry_id)
 
@@ -353,6 +355,8 @@ class DomoTimerWeekdaySwitch(SwitchEntity):
             raise HomeAssistantError(f"Error sending timers_enable_day_req: {err}") from err
 
     async def async_added_to_hass(self):
+        common = await async_get_translated_strings(self.hass, "common_entities")
+        self._attr_name = common.get(f"weekday_labels.{self._weekday}", _WEEKDAY_LABELS[self._weekday])
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -385,7 +389,6 @@ class DomoIrrigationEnabledSwitch(SwitchEntity):
     def __init__(self, zone: DomoIrrigationZone, entry_id: str):
         self._zone = zone
         self._attr_unique_id = f"domo_irrigation_{zone.zone_id}_enabled"
-        self._attr_name = "Abilitazione"
         self._attr_icon = "mdi:sprinkler-variant"
         self._attr_device_info = _irrigation_zone_device_info(zone, entry_id)
 
@@ -406,6 +409,8 @@ class DomoIrrigationEnabledSwitch(SwitchEntity):
             raise HomeAssistantError(f"Error sending irrigation_set_req (enabled): {err}") from err
 
     async def async_added_to_hass(self):
+        i18n = await async_get_translated_strings(self.hass, "irrigation_entities")
+        self._attr_name = i18n.get("entity_names.enabled", "Enabled")
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -425,7 +430,6 @@ class DomoIrrigationDaySwitch(SwitchEntity):
         self._zone = zone
         self._weekday = weekday
         self._attr_unique_id = f"domo_irrigation_{zone.zone_id}_day_{weekday}"
-        self._attr_name = _WEEKDAY_LABELS[weekday]
         self._attr_icon = "mdi:calendar-week"
         self._attr_device_info = _irrigation_zone_device_info(zone, entry_id)
 
@@ -449,6 +453,8 @@ class DomoIrrigationDaySwitch(SwitchEntity):
             raise HomeAssistantError(f"Error sending irrigation_set_req (days): {err}") from err
 
     async def async_added_to_hass(self):
+        common = await async_get_translated_strings(self.hass, "common_entities")
+        self._attr_name = common.get(f"weekday_labels.{self._weekday}", _WEEKDAY_LABELS[self._weekday])
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -468,7 +474,6 @@ class DomoIrrigationForceSwitch(SwitchEntity):
     def __init__(self, zone: DomoIrrigationZone, entry_id: str):
         self._zone = zone
         self._attr_unique_id = f"domo_irrigation_{zone.zone_id}_forced"
-        self._attr_name = "Modalità manuale"
         self._attr_device_info = _irrigation_zone_device_info(zone, entry_id)
 
     @property
@@ -490,6 +495,8 @@ class DomoIrrigationForceSwitch(SwitchEntity):
             raise HomeAssistantError(f"Error sending irrigation_force_req: {err}") from err
 
     async def async_added_to_hass(self):
+        i18n = await async_get_translated_strings(self.hass, "irrigation_entities")
+        self._attr_name = i18n.get("entity_names.manual_mode", "Manual mode")
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -566,15 +573,22 @@ class DomoSprinklerSwitch(SwitchEntity):
 # ===== LOAD CONTROL =====
 # ============================================================
 
-def _loadsctrl_meter_device_info(meter: DomoLoadCtrlMeter) -> DeviceInfo:
+def _loadsctrl_meter_device_info(hass, meter: DomoLoadCtrlMeter, entry_id: str) -> DeviceInfo:
     """DeviceInfo for the load control manager (e.g. 'General'). Same identifiers used in domo/sensor.py."""
-    return DeviceInfo(
+    device_info = DeviceInfo(
         identifiers={(DOMAIN, meter.unique_id)},
         name=meter.name,
         manufacturer="Home Sapiens Assistant",
         model="Eti/Domo",
-        via_device=(DOMAIN, "loadsctrl_root"),
     )
+
+    parent_device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, "loadsctrl_root"), entry_id
+    )
+    if parent_device is not None:
+        device_info["via_device_id"] = parent_device.id
+
+    return device_info
 
 
 class DomoLoadCtrlRelaySwitch(SwitchEntity):
@@ -582,11 +596,11 @@ class DomoLoadCtrlRelaySwitch(SwitchEntity):
 
     _attr_should_poll = False
 
-    def __init__(self, relay: DomoLoadCtrlRelay):
+    def __init__(self, hass, relay: DomoLoadCtrlRelay, entry_id: str):
         self._relay = relay
         self._attr_unique_id = relay.unique_id
         self._attr_name = relay.name
-        self._attr_device_info = _loadsctrl_meter_device_info(relay.meter)
+        self._attr_device_info = _loadsctrl_meter_device_info(hass, relay.meter, entry_id)
 
     @property
     def is_on(self) -> bool:

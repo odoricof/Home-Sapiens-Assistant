@@ -28,6 +28,7 @@ from homeassistant.components.text import TextEntity, TextMode
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 
@@ -44,6 +45,7 @@ from .platforms.scheduler import (
     async_set_timer_timetable,
 )
 from .platforms.sicu import get_security_device, CENTRAL_STATUS_MAP
+from .services.i18n import async_get_translated_strings
 from .platforms.thermoregulation import (
     DomoThermostat,
     get_all_thermostats as get_all_thermostats_thermo,
@@ -88,18 +90,30 @@ async def async_setup_entry(hass, entry, async_add_entities):
     # --- Thermostats (weekly thermal profile) ---
     thermostats = get_all_thermostats_thermo()
     if thermostats:
-        profile_entities = [DomoThermostatProfileText(t, entry.entry_id) for t in thermostats]
+        thermo_strings = await async_get_translated_strings(hass, "thermoregulation_entities")
+        profile_name = thermo_strings.get(
+            "entity_names.profile", "Daily thermal profile (HH:MM-HH:MM=tN,...)"
+        )
+        profile_entities = [
+            DomoThermostatProfileText(t, entry.entry_id, profile_name) for t in thermostats
+        ]
         async_add_entities(profile_entities)
         _LOGGER.info("Added %d thermal profile text entities", len(profile_entities))
 
     # --- Load control (daily energy profile) ---
     loadsctrl_added_ids: set[int] = set()
+    loadsctrl_strings = await async_get_translated_strings(hass, "loadsctrl_entities")
+    loadsctrl_profile_name = loadsctrl_strings.get(
+        "entity_names.profile", "Daily energy profile (H-H=W, H-H=W)"
+    )
 
     def _add_loadsctrl_profile_text(meter: DomoLoadCtrlMeter):
         if meter.meter_id in loadsctrl_added_ids:
             return
         loadsctrl_added_ids.add(meter.meter_id)
-        async_add_entities([DomoLoadCtrlProfileText(meter)])
+        async_add_entities(
+            [DomoLoadCtrlProfileText(hass, meter, entry.entry_id, loadsctrl_profile_name)]
+        )
         _LOGGER.info(
             "Added loadsctrl profile text entity for meter id=%s (%s)",
             meter.meter_id, meter.name,
@@ -123,16 +137,27 @@ async def async_setup_entry(hass, entry, async_add_entities):
     # --- Scenarios (create / rename / delete) ---
     scenario_device = get_scenario_device()
     if scenario_device:
-        async_add_entities([DomoScenarioNameText(scenario_device, entry.entry_id)])
+        scenarios_strings = await async_get_translated_strings(hass, "scenarios_entities")
+        scenario_name = scenarios_strings.get("entity_names.name", "Scenario name")
+        async_add_entities([DomoScenarioNameText(scenario_device, entry.entry_id, scenario_name)])
         _LOGGER.info("Added scenario name/status text entity")
     else:
         _LOGGER.debug("Scenario device not yet available, skipping scenario text entity")
 
     # --- Security (central actions: silence / reset_event_memory) ---
     if get_security_device() and not hass.data[DOMAIN]["_sicu_action_texts_added"]:
+        sicu_strings = await async_get_translated_strings(hass, "sicu_entities")
         async_add_entities([
-            DomoSicuActionText(entry.entry_id, "silence", "CODE - Silenzia sirene", "mdi:bell-off-outline"),
-            DomoSicuActionText(entry.entry_id, "reset_event_memory", "CODE - Reset memoria eventi", "mdi:refresh"),
+            DomoSicuActionText(
+                entry.entry_id, "silence",
+                sicu_strings.get("action_names.silence", "CODE - Silence sirens"),
+                "mdi:bell-off-outline",
+            ),
+            DomoSicuActionText(
+                entry.entry_id, "reset_event_memory",
+                sicu_strings.get("action_names.reset_event_memory", "CODE - Reset event memory"),
+                "mdi:refresh",
+            ),
         ])
         hass.data[DOMAIN]["_sicu_action_texts_added"] = True
         _LOGGER.info("Added 2 text entities for SICU actions (silence / reset_event_memory)")
@@ -144,8 +169,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 # ===== SCHEDULER (timer) =====
 # ============================================================
 
-_SLOT_PATTERN = re.compile(r"^(|Disabilitato|([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d)$")
-_SLOT_DISABLED_LABEL = "Disabilitato"
+_TIME_SLOT_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$")
+_SLOT_DISABLED_LABEL_FALLBACK = "Disabled"
 
 
 class DomoTimerSlotText(TextEntity):
@@ -156,19 +181,25 @@ class DomoTimerSlotText(TextEntity):
     _attr_mode = TextMode.TEXT
     _attr_native_min = 0
     _attr_native_max = 12
-    _attr_pattern = _SLOT_PATTERN.pattern
 
     def __init__(self, timer: DomoTimer, slot_index: int, entry_id: str):
         self._timer = timer
         self._slot_index = slot_index
         self._attr_unique_id = f"domo_timer_{timer.timer_id}_slot_{slot_index + 1}"
         self._attr_name = f"Slot {slot_index + 1}"
+        self._disabled_label = _SLOT_DISABLED_LABEL_FALLBACK
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_timer_{timer.timer_id}")},
             name=timer.name,
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
+        )
+
+    @property
+    def pattern(self) -> str:
+        return r"^(|{}|([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d)$".format(
+            re.escape(self._disabled_label)
         )
 
     @property
@@ -183,7 +214,7 @@ class DomoTimerSlotText(TextEntity):
     def native_value(self) -> str:
         slot = self._timer.get_slot(self._slot_index)
         if slot is None:
-            return _SLOT_DISABLED_LABEL
+            return self._disabled_label
 
         start = slot.get("start", {}) or {}
         stop = slot.get("stop", {}) or {}
@@ -191,7 +222,7 @@ class DomoTimerSlotText(TextEntity):
         stop_h, stop_m = stop.get("hour", -1), stop.get("min", -1)
 
         if start_h < 0 or start_m < 0:
-            return _SLOT_DISABLED_LABEL
+            return self._disabled_label
 
         return "{:02d}:{:02d}-{:02d}:{:02d}".format(
             start_h, start_m,
@@ -201,9 +232,9 @@ class DomoTimerSlotText(TextEntity):
 
     async def async_set_value(self, value: str) -> None:
         value = value.strip()
-        disable_slot = value == "" or value == _SLOT_DISABLED_LABEL
+        disable_slot = value == "" or value == self._disabled_label
 
-        if not disable_slot and not _SLOT_PATTERN.match(value):
+        if not disable_slot and not _TIME_SLOT_PATTERN.match(value):
             raise HomeAssistantError(f"Invalid format: {value} (expected HH:MM-HH:MM)")
 
         if not disable_slot:
@@ -257,6 +288,8 @@ class DomoTimerSlotText(TextEntity):
             raise HomeAssistantError(f"Error sending timers_set_req: {err}") from err
 
     async def async_added_to_hass(self):
+        scheduler_strings = await async_get_translated_strings(self.hass, "scheduler_entities")
+        self._disabled_label = scheduler_strings.get("slot_disabled", _SLOT_DISABLED_LABEL_FALLBACK)
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -278,11 +311,11 @@ class DomoThermostatProfileText(TextEntity):
     _attr_entity_category = EntityCategory.CONFIG
     _attr_mode = TextMode.TEXT
     _attr_native_max = 255
-    _attr_name = "Profilo termico giornaliero (HH:MM-HH:MM=tN,...)"
     _attr_force_update = True
 
-    def __init__(self, thermostat: DomoThermostat, entry_id: str):
+    def __init__(self, thermostat: DomoThermostat, entry_id: str, name: str):
         self._thermostat = thermostat
+        self._attr_name = name
         self._attr_unique_id = f"domo_thermostat_{thermostat.act_id}_profile_text"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_climate_{thermostat.unique_id}")},
@@ -298,9 +331,10 @@ class DomoThermostatProfileText(TextEntity):
 
     async def async_set_value(self, value: str) -> None:
         _LOGGER.debug("TEXT %s: async_set_value called with value=%r", self._attr_unique_id, value)
+        strings = await async_get_translated_strings(self.hass, "thermoregulation_entities")
         self._attempt_token += 1
         my_token = self._attempt_token
-        self._pending_display = "Attendere..."
+        self._pending_display = strings.get("action_feedback.pending", "Please wait...")
         self.async_write_ha_state()
         try:
             ok = await self._thermostat.async_set_thermal_profile(value.strip())
@@ -308,12 +342,19 @@ class DomoThermostatProfileText(TextEntity):
             self._show_transient_message(str(err), my_token)
             raise HomeAssistantError(str(err)) from err
         except Exception as err:
-            self._show_transient_message(f"Errore invio thermo_zone_config_req: {err}", my_token)
+            self._show_transient_message(
+                strings.get("action_feedback.send_error", "Error sending command: {err}").format(err=err),
+                my_token,
+            )
             raise HomeAssistantError(f"Error sending thermo_zone_config_req: {err}") from err
         _LOGGER.debug("TEXT %s: async_set_thermal_profile returned ok=%s", self._attr_unique_id, ok)
         if not ok:
             self._show_transient_message(
-                "Comando ignorato: set_point non ancora noto per questo termostato.", my_token
+                strings.get(
+                    "action_feedback.command_ignored",
+                    "Command ignored: set_point not yet known for this thermostat.",
+                ),
+                my_token,
             )
             raise HomeAssistantError("Command ignored: set_point not yet known for this thermostat.")
         await asyncio.sleep(2)
@@ -354,16 +395,23 @@ class DomoThermostatProfileText(TextEntity):
 # ===== LOAD CONTROL (daily energy profile) =====
 # ============================================================
 
-def _loadsctrl_meter_device_info(meter: DomoLoadCtrlMeter) -> DeviceInfo:
+def _loadsctrl_meter_device_info(hass, meter: DomoLoadCtrlMeter, entry_id: str) -> DeviceInfo:
     """DeviceInfo of the load control manager (e.g. 'General'). Same identifiers
     used in domo/sensor.py, domo/switch.py and domo/select.py."""
-    return DeviceInfo(
+    device_info = DeviceInfo(
         identifiers={(DOMAIN, meter.unique_id)},
         name=meter.name,
         manufacturer="Home Sapiens Assistant",
         model="Eti/Domo",
-        via_device=(DOMAIN, "loadsctrl_root"),
     )
+
+    parent_device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, "loadsctrl_root"), entry_id
+    )
+    if parent_device is not None:
+        device_info["via_device_id"] = parent_device.id
+
+    return device_info
 
 
 class DomoLoadCtrlProfileText(TextEntity):
@@ -374,13 +422,13 @@ class DomoLoadCtrlProfileText(TextEntity):
     _attr_entity_category = EntityCategory.CONFIG
     _attr_mode = TextMode.TEXT
     _attr_native_max = 255
-    _attr_name = "Profilo energetico (H-H=W, H-H=W)"
     _attr_force_update = True
 
-    def __init__(self, meter: DomoLoadCtrlMeter):
+    def __init__(self, hass, meter: DomoLoadCtrlMeter, entry_id: str, name: str):
         self._meter = meter
+        self._attr_name = name
         self._attr_unique_id = f"{meter.unique_id}_profile_text"
-        self._attr_device_info = _loadsctrl_meter_device_info(meter)
+        self._attr_device_info = _loadsctrl_meter_device_info(hass, meter, entry_id)
         self._pending_display: str | None = None
         self._attempt_token: int = 0
 
@@ -392,9 +440,10 @@ class DomoLoadCtrlProfileText(TextEntity):
 
     async def async_set_value(self, value: str) -> None:
         _LOGGER.debug("LOADSCTRL TEXT %s: async_set_value called with value=%r", self._attr_unique_id, value)
+        strings = await async_get_translated_strings(self.hass, "loadsctrl_entities")
         self._attempt_token += 1
         my_token = self._attempt_token
-        self._pending_display = "Attendere..."
+        self._pending_display = strings.get("action_feedback.pending", "Please wait...")
         self.async_write_ha_state()
         try:
             await self._meter.async_set_profile(value.strip())
@@ -402,7 +451,10 @@ class DomoLoadCtrlProfileText(TextEntity):
             self._show_transient_message(str(err), my_token)
             raise HomeAssistantError(str(err)) from err
         except Exception as err:
-            self._show_transient_message(f"Errore invio loadsctrl_meter_set_req: {err}", my_token)
+            self._show_transient_message(
+                strings.get("action_feedback.send_error", "Error sending command: {err}").format(err=err),
+                my_token,
+            )
             raise HomeAssistantError(f"Error sending loadsctrl_meter_set_req: {err}") from err
         await asyncio.sleep(2)
         if my_token == self._attempt_token:
@@ -486,6 +538,7 @@ class DomoSicuActionText(TextEntity):
         if not device:
             raise HomeAssistantError("Security central unit not available")
 
+        strings = await async_get_translated_strings(self.hass, "sicu_entities")
         self._attempt_token += 1
         my_token = self._attempt_token
 
@@ -497,7 +550,7 @@ class DomoSicuActionText(TextEntity):
                 "SICU ACTION %s: precondition not met (status=%s), command not sent",
                 self._action, initial_status,
             )
-            self._pending_display = "Nessuna azione eseguita"
+            self._pending_display = strings.get("action_feedback.no_action", "No action performed")
             self.async_write_ha_state()
             await asyncio.sleep(2)
             if my_token == self._attempt_token:
@@ -511,7 +564,7 @@ class DomoSicuActionText(TextEntity):
             else:
                 await device.reset_event_memory(code)
         except Exception as err:
-            self._show_transient_message("Errore", my_token)
+            self._show_transient_message(strings.get("action_feedback.error", "Error"), my_token)
             raise HomeAssistantError(f"Error in SICU ACTION {self._action}: {err}") from err
 
         if initial_status in self._TARGET_STATUS.get(self._action, set()):
@@ -519,18 +572,18 @@ class DomoSicuActionText(TextEntity):
                 "SICU ACTION %s: central already idle (status=%s), no action needed",
                 self._action, initial_status,
             )
-            self._pending_display = "Nessuna azione eseguita"
+            self._pending_display = strings.get("action_feedback.no_action", "No action performed")
         else:
             confirmed = await self._wait_for_confirmation(device, initial_status)
             if confirmed:
                 _LOGGER.info("SICU ACTION %s confirmed by central unit", self._action)
-                self._pending_display = "eseguito"
+                self._pending_display = strings.get("action_feedback.done", "done")
             else:
                 _LOGGER.warning(
                     "SICU ACTION %s NOT confirmed within timeout (current status=%s)",
                     self._action, device.state.get("status"),
                 )
-                self._pending_display = "Errore"
+                self._pending_display = strings.get("action_feedback.error", "Error")
         self.async_write_ha_state()
 
         await asyncio.sleep(2)
@@ -594,14 +647,15 @@ class DomoScenarioNameText(TextEntity):
     _attr_mode = TextMode.TEXT
     _attr_native_max = 64
     _attr_icon = "mdi:palette"
-    _attr_name = "Nome scenario"
 
-    def __init__(self, device: DomoScenarioDevice, entry_id: str):
+    def __init__(self, device: DomoScenarioDevice, entry_id: str, name: str):
         self._device = device
+        self._attr_name = name
+        self._i18n: dict = {}
         self._attr_unique_id = "domo_scenario_name_text"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_scenarios")},
-            name="Scenari",
+            name="Scenarios",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
@@ -611,9 +665,11 @@ class DomoScenarioNameText(TextEntity):
         if self._device.status_message is not None:
             return self._device.status_message
         if self._device.registration_state == "recording":
-            return f"Registrazione in corso: {self._device.name_draft}"
+            return self._i18n.get("status.recording", "Registration in progress: {name}").format(
+                name=self._device.name_draft
+            )
         if self._device.rename_pending:
-            return "Nuovo nome: "
+            return self._i18n.get("status.new_name", "New name: ")
         return self._device.name_draft or ""
 
     async def async_set_value(self, value: str) -> None:
@@ -621,6 +677,7 @@ class DomoScenarioNameText(TextEntity):
         self.async_write_ha_state()
 
     async def async_added_to_hass(self):
+        self._i18n = await async_get_translated_strings(self.hass, "scenarios_entities")
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )

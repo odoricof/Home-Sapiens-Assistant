@@ -29,6 +29,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
 from .platforms.scenarios import DomoScenarioDevice, get_scenario_device
 from .platforms.thermoregulation import get_all_thermostats
+from .services.i18n import async_get_translated_strings
 from .services.thermo_backup import (
     async_backup_thermal_profiles,
     async_restore_thermal_profiles,
@@ -78,7 +79,6 @@ class DomoThermoBackupButton(ButtonEntity):
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:content-save-outline"
-    _attr_name = "Backup profili termici"
 
     def __init__(self, hass, entry_id: str):
         self.hass = hass
@@ -86,12 +86,23 @@ class DomoThermoBackupButton(ButtonEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_climate")},
         )
+        self._i18n: dict = {}
+
+    async def async_added_to_hass(self) -> None:
+        self._i18n = await async_get_translated_strings(self.hass, "thermoregulation_entities")
+
+    @property
+    def name(self) -> str:
+        return self._i18n.get("entity_names.thermo_backup_button", "Backup profili termici")
 
     async def async_press(self) -> None:
         try:
             filename = await async_backup_thermal_profiles(self.hass)
         except Exception as err:
-            raise HomeAssistantError(f"Backup failed: {err}") from err
+            i18n = self._i18n or await async_get_translated_strings(self.hass, "thermoregulation_entities")
+            raise HomeAssistantError(
+                i18n.get("action_feedback.backup_error", "Backup failed: {err}").format(err=err)
+            ) from err
         _LOGGER.info("THERMO BACKUP: created %s", filename)
         async_dispatcher_send(self.hass, SIGNAL_UPDATE_ENTITY, self._attr_unique_id)
 
@@ -102,7 +113,6 @@ class DomoThermoRestoreButton(ButtonEntity):
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:file-restore-outline"
-    _attr_name = "Ripristina profili termici"
 
     def __init__(self, hass, entry_id: str):
         self.hass = hass
@@ -110,15 +120,30 @@ class DomoThermoRestoreButton(ButtonEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_climate")},
         )
+        self._i18n: dict = {}
+
+    async def async_added_to_hass(self) -> None:
+        self._i18n = await async_get_translated_strings(self.hass, "thermoregulation_entities")
+
+    @property
+    def name(self) -> str:
+        return self._i18n.get("entity_names.thermo_restore_button", "Ripristina profili termici")
 
     async def async_press(self) -> None:
+        i18n = self._i18n or await async_get_translated_strings(self.hass, "thermoregulation_entities")
         filename = get_selected_restore_file()
         if not filename:
-            raise HomeAssistantError("No backup file selected")
+            raise HomeAssistantError(
+                i18n.get("action_feedback.no_restore_file_selected", "No backup file selected")
+            )
         try:
             await async_restore_thermal_profiles(self.hass, filename)
         except Exception as err:
-            raise HomeAssistantError(f"Restore failed ({filename}): {err}") from err
+            raise HomeAssistantError(
+                i18n.get("action_feedback.restore_error", "Restore failed ({filename}): {err}").format(
+                    filename=filename, err=err
+                )
+            ) from err
         _LOGGER.info("THERMO RESTORE: completed from %s", filename)
 
 
@@ -132,7 +157,6 @@ class DomoScenarioStartRegistrationButton(ButtonEntity):
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:record-rec"
-    _attr_name = "Avvia registrazione scenario"
 
     def __init__(self, device: DomoScenarioDevice, entry_id: str):
         self._device = device
@@ -143,12 +167,26 @@ class DomoScenarioStartRegistrationButton(ButtonEntity):
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
+        self._i18n: dict = {}
+
+    async def async_added_to_hass(self) -> None:
+        self._i18n = await async_get_translated_strings(self.hass, "scenarios_entities")
+
+    @property
+    def name(self) -> str:
+        return self._i18n.get("entity_names.start_registration_button", "Avvia registrazione scenario")
 
     async def async_press(self) -> None:
         try:
             await self._device.start_registration()
         except Exception as err:
-            raise HomeAssistantError(f"Error starting scenario registration: {err}") from err
+            i18n = self._i18n or await async_get_translated_strings(self.hass, "scenarios_entities")
+            raise HomeAssistantError(
+                i18n.get(
+                    "action_feedback.start_registration_error",
+                    "Error starting scenario registration: {err}",
+                ).format(err=err)
+            ) from err
 
 
 class DomoScenarioStopRegistrationButton(ButtonEntity):
@@ -157,7 +195,6 @@ class DomoScenarioStopRegistrationButton(ButtonEntity):
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:content-save"
-    _attr_name = "Concludi registrazione scenario"
 
     def __init__(self, device: DomoScenarioDevice, entry_id: str):
         self._device = device
@@ -168,12 +205,26 @@ class DomoScenarioStopRegistrationButton(ButtonEntity):
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
+        self._i18n: dict = {}
+
+    async def async_added_to_hass(self) -> None:
+        self._i18n = await async_get_translated_strings(self.hass, "scenarios_entities")
+
+    @property
+    def name(self) -> str:
+        return self._i18n.get("entity_names.stop_registration_button", "Concludi registrazione scenario")
 
     async def async_press(self) -> None:
         try:
             await self._device.stop_registration()
         except Exception as err:
-            raise HomeAssistantError(f"Error stopping scenario registration: {err}") from err
+            i18n = self._i18n or await async_get_translated_strings(self.hass, "scenarios_entities")
+            raise HomeAssistantError(
+                i18n.get(
+                    "action_feedback.stop_registration_error",
+                    "Error stopping scenario registration: {err}",
+                ).format(err=err)
+            ) from err
 
 
 class DomoScenarioDeleteButton(ButtonEntity):
@@ -182,7 +233,6 @@ class DomoScenarioDeleteButton(ButtonEntity):
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:delete"
-    _attr_name = "Cancella scenario"
 
     def __init__(self, device: DomoScenarioDevice, entry_id: str):
         self._device = device
@@ -193,12 +243,23 @@ class DomoScenarioDeleteButton(ButtonEntity):
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
+        self._i18n: dict = {}
+
+    async def async_added_to_hass(self) -> None:
+        self._i18n = await async_get_translated_strings(self.hass, "scenarios_entities")
+
+    @property
+    def name(self) -> str:
+        return self._i18n.get("entity_names.delete_button", "Cancella scenario")
 
     async def async_press(self) -> None:
         try:
             await self._device.delete_scenario_by_name(self._device.name_draft)
         except Exception as err:
-            raise HomeAssistantError(f"Error deleting scenario: {err}") from err
+            i18n = self._i18n or await async_get_translated_strings(self.hass, "scenarios_entities")
+            raise HomeAssistantError(
+                i18n.get("action_feedback.delete_error", "Error deleting scenario: {err}").format(err=err)
+            ) from err
 
 
 class DomoScenarioRenameButton(ButtonEntity):
@@ -207,7 +268,6 @@ class DomoScenarioRenameButton(ButtonEntity):
     _attr_should_poll = False
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:rename-outline"
-    _attr_name = "Rinomina scenario"
 
     def __init__(self, device: DomoScenarioDevice, entry_id: str):
         self._device = device
@@ -218,9 +278,20 @@ class DomoScenarioRenameButton(ButtonEntity):
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
+        self._i18n: dict = {}
+
+    async def async_added_to_hass(self) -> None:
+        self._i18n = await async_get_translated_strings(self.hass, "scenarios_entities")
+
+    @property
+    def name(self) -> str:
+        return self._i18n.get("entity_names.rename_button", "Rinomina scenario")
 
     async def async_press(self) -> None:
         try:
             await self._device.start_rename()
         except Exception as err:
-            raise HomeAssistantError(f"Error starting scenario rename: {err}") from err
+            i18n = self._i18n or await async_get_translated_strings(self.hass, "scenarios_entities")
+            raise HomeAssistantError(
+                i18n.get("action_feedback.rename_error", "Error starting scenario rename: {err}").format(err=err)
+            ) from err

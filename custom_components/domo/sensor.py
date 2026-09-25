@@ -41,6 +41,7 @@ from .platforms.sicu import (
     INPUT_STATUS_MAP,
     get_security_device,
 )
+from .services.i18n import async_get_translated_strings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,12 +101,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     # --- Security inputs ---
     if security and hasattr(security, "_inputs") and security._inputs:
+        burglar_alarm_device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, "burglar_alarm"), entry.entry_id
+        )
         security_inputs_device_info = DeviceInfo(
             identifiers={(DOMAIN, "burglar_alarm_inputs")},
             name="Security Inputs",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
-            via_device=(DOMAIN, "burglar_alarm"),
+            via_device_id=burglar_alarm_device.id if burglar_alarm_device else None,
         )
 
         for inp in security._inputs:
@@ -116,12 +120,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     # --- Security areas ---
     if security and hasattr(security, "_areas") and security._areas:
+        burglar_alarm_device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, "burglar_alarm"), entry.entry_id
+        )
         security_areas_device_info = DeviceInfo(
             identifiers={(DOMAIN, "burglar_alarm_areas")},
             name="Security Areas",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
-            via_device=(DOMAIN, "burglar_alarm"),
+            via_device_id=burglar_alarm_device.id if burglar_alarm_device else None,
         )
 
         for area in security._areas:
@@ -418,41 +425,45 @@ class SecurityInputSensor(SensorEntity):
         self._attr_name = f"Security {name}"
         self._attr_device_info = device_info
 
-        self._state = "Sconosciuto"
+        self._status_key = "unknown"
         self._raw_status = None
         self._areas = []
+        self._i18n = {}
 
         for inp in security._inputs:
             if inp.get("input_id") == input_id:
                 raw_status = inp.get("status")
                 self._raw_status = raw_status
-                self._state = INPUT_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
+                self._status_key = INPUT_STATUS_MAP.get(raw_status)
                 self._areas = inp.get("areas", [])
                 break
 
-        _LOGGER.debug("Security input %s initial state: %s", name, self._state)
+        _LOGGER.debug("Security input %s initial state key: %s", name, self._status_key)
 
     @property
     def icon(self) -> str:
         """Icon based on the state."""
-        if self._state == "Allarme":
+        if self._status_key == "alarm":
             return "mdi:alarm-light"
-        if self._state == "Aperto":
+        if self._status_key == "open":
             return "mdi:lock-open-variant"
-        if self._state == "Chiuso":
+        if self._status_key == "closed":
             return "mdi:lock"
-        if self._state == "Escluso":
+        if self._status_key == "bypassed":
             return "mdi:shield-off"
-        if self._state == "Memoria allarme":
+        if self._status_key == "alarm_memory":
             return "mdi:bell-alert"
-        if self._state == "Batteria scarica":
+        if self._status_key == "low_battery":
             return "mdi:battery-low"
         return "mdi:sensor"
 
     @property
     def native_value(self) -> str:
         """Return the textual state of the sensor."""
-        return self._state or "Sconosciuto"
+        if self._status_key is not None:
+            return self._i18n.get(f"input_status.{self._status_key}", self._status_key)
+        template = self._i18n.get("unknown_with_code", "Unknown ({code})")
+        return template.format(code=self._raw_status)
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -471,13 +482,14 @@ class SecurityInputSensor(SensorEntity):
             if inp.get("input_id") == self._input_id:
                 raw_status = inp.get("status")
                 self._raw_status = raw_status
-                self._state = INPUT_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
+                self._status_key = INPUT_STATUS_MAP.get(raw_status)
                 self._areas = inp.get("areas", [])
                 return True
         return False
 
     async def async_added_to_hass(self):
         """Register for updates."""
+        self._i18n = await async_get_translated_strings(self.hass, "sicu_entities")
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -506,39 +518,42 @@ class SecurityAreaSensor(SensorEntity):
         self._attr_unique_id = f"{security.unique_id}_area_{area_id}"
         self._attr_name = f"Security {name}"
         self._attr_device_info = device_info
-        self._state = "Sconosciuto"
+        self._status_key = "unknown"
         self._raw_status = None
+        self._i18n = {}
+
 
         for area in security._areas:
             if area.get("area_id") == area_id:
                 raw_status = area.get("status")
                 self._raw_status = raw_status
-                self._state = AREA_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
+                self._status_key = AREA_STATUS_MAP.get(raw_status)
                 break
 
-        _LOGGER.debug("Security area %s initial state: %s", name, self._state)
+        _LOGGER.debug("Security area %s initial state key: %s", name, self._status_key)
 
     @property
     def icon(self) -> str:
         """Icon based on the state."""
-        if self._state == "Inserita":
+        if self._status_key == "armed":
             return "mdi:shield-check"
-        if self._state == "Inserimento in corso":
+        if self._status_key == "arming":
             return "mdi:shield-sync"
-        if self._state == "Allarme intrusione in corso":
+        if self._status_key == "intrusion_alarm":
             return "mdi:alarm-light"
-        if self._state == "Memoria allarme":
+        if self._status_key == "alarm_memory":
             return "mdi:bell-alert"
-        if self._state == "Pronta con ingressi chiusi":
-            return "mdi:shield-lock"
-        if "Non pronta" in self._state:
+        if self._status_key == "not_ready":
             return "mdi:shield-lock-open"
         return "mdi:shield"
 
     @property
     def native_value(self) -> str:
         """Return the textual state of the area."""
-        return self._state
+        if self._status_key is not None:
+            return self._i18n.get(f"area_status.{self._status_key}", self._status_key)
+        template = self._i18n.get("unknown_with_code", "Unknown ({code})")
+        return template.format(code=self._raw_status)
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -557,12 +572,17 @@ class SecurityAreaSensor(SensorEntity):
             if area.get("area_id") == self._area_id:
                 raw_status = area.get("status")
                 self._raw_status = raw_status
-                self._state = AREA_STATUS_MAP.get(raw_status, f"Sconosciuto ({raw_status})")
+                self._status_key = AREA_STATUS_MAP.get(raw_status)
                 return True
         return False
 
     async def async_added_to_hass(self):
         """Register for updates."""
+        self._i18n = await async_get_translated_strings(self.hass, "sicu_entities")
+        _LOGGER.debug(
+            "sicu_entities i18n loaded: hass.config.language=%s, keys_loaded=%d",
+            self.hass.config.language, len(self._i18n),
+        )        
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )

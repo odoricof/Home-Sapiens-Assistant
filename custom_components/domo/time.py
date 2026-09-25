@@ -26,6 +26,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN, SIGNAL_DISCOVERY_NEW, SIGNAL_UPDATE_ENTITY
+from .services.i18n import async_get_translated_strings
 from .platforms.irrigation import (
     DomoIrrigationZone,
     get_all_irrigation_zones,
@@ -33,6 +34,8 @@ from .platforms.irrigation import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+_I18N_CATEGORY = "irrigation_entities"
 
 
 # ============================================================
@@ -84,7 +87,7 @@ class DomoIrrigationStartTime(TimeEntity):
     def __init__(self, zone: DomoIrrigationZone, entry_id: str):
         self._zone = zone
         self._attr_unique_id = f"domo_irrigation_{zone.zone_id}_start"
-        self._attr_name = "ORA INIZIO"
+        self._attr_name = "START TIME"
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_irrigation_{zone.zone_id}")},
@@ -114,11 +117,14 @@ class DomoIrrigationStartTime(TimeEntity):
                 self._zone.gateway,
             )
         except Exception as err:
+            i18n = await async_get_translated_strings(self.hass, _I18N_CATEGORY)
             raise HomeAssistantError(
-                f"Errore invio irrigation_set_req (start): {err}"
+                i18n.get("action_feedback.send_error", "Error sending command: {err}").format(err=err)
             ) from err
 
     async def async_added_to_hass(self):
+        i18n = await async_get_translated_strings(self.hass, _I18N_CATEGORY)
+        self._attr_name = i18n.get("entity_names.start_time", self._attr_name)
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -138,7 +144,7 @@ class DomoIrrigationEndTime(TimeEntity):
     def __init__(self, zone: DomoIrrigationZone, entry_id: str):
         self._zone = zone
         self._attr_unique_id = f"domo_irrigation_{zone.zone_id}_end"
-        self._attr_name = "ORA FINE"
+        self._attr_name = "END TIME"
 
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_irrigation_{zone.zone_id}")},
@@ -156,14 +162,20 @@ class DomoIrrigationEndTime(TimeEntity):
 
     async def async_set_value(self, value: dt_time) -> None:
         _LOGGER.warning(
-            "Attempted write on ORA FINE (read-only) for zone id=%s",
+            "Attempted write on end time (read-only) for zone id=%s",
             self._zone.zone_id,
         )
+        i18n = await async_get_translated_strings(self.hass, _I18N_CATEGORY)
         raise HomeAssistantError(
-            "Ora fine calcolata automaticamente dal gateway: non modificabile."
+            i18n.get(
+                "action_feedback.end_time_readonly",
+                "End time is automatically calculated by the gateway: not editable.",
+            )
         )
 
     async def async_added_to_hass(self):
+        i18n = await async_get_translated_strings(self.hass, _I18N_CATEGORY)
+        self._attr_name = i18n.get("entity_names.end_time", self._attr_name)
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )

@@ -1,38 +1,53 @@
-### 🌐 Lingua / Language
-- [Italiano](README.it.md) | [English](README.md)
-
----
-
 [![Current release](https://img.shields.io/github/release/odoricof/Home-Sapiens-Assistant.svg?style=plastic&label=Current%20release)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=plastic)](https://github.com/odoricof/Home-Sapiens-Assistant)  
 [![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![Buy me a beer 🍺🍺🍺](https://img.shields.io/badge/PayPal-Buy%20me%20a%20beer%20🍺🍺🍺-blue?style=plastic&logo=paypal)](https://paypal.me/odoricof)
 
+
 <img src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo@2x.png" width="96" alt="">
 
 # Home Sapiens Assistant
 ---
-**Integrazione personalizzata** per **Home Assistant** per interfacciarsi con **Bpt Home Automation / CAME Domotic 3.0 (sistemi basati su server ETI/DOMO)** tramite l'interfaccia web di Home Sapiens.
+**Integrazione personalizzata multilingue** per **Home Assistant**, consente di interfacciarsi con **Bpt Home Automation / CAME Domotic 3.0 (sistemi basati su server ETI/DOMO)** tramite l'interfaccia web di Home Sapiens.
 
 ---
+### 🌍 Traduzioni
 
+| 🇮🇹 Italian | 🇬🇧 English | 🇪🇸 Spanish | 🇫🇷 French | 🇩🇪 German | 🇷🇺 Russian |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+
+- Versione README: [Italiano](README.it.md) | [English](README.md)
+---
 ## Funzionalità
-### (Per maggiori dettagli consultare il file [Changelog](https://github.com/odoricof/Home-Sapiens-Assistant/blob/main/Changelog.it.md))
 
 Questa integrazione consente a Home Assistant di monitorare e controllare un sistema Bpt Home Automation / CAME Domotic.
 
 Attualmente supportati:
 
 - Attivazioni
+   - On/Off
+   - Catalogo icone
+   
 - Ingressi analogici
+   - Valore e unità di misura
+   - Icone appropriate in base alla grandezza misurata
+   
 - Climatizzazione
+   - Termostati
    - Ventilconvettori (fan coils)
    - Gestione profili termici
-   - Replica integrale di tutte le funzioni esposte in lettura e scrittura
+   - Copia/incolla profili termici
+   - Esposizione e gestione di tutti i parametri configurabili
+
 - Ingressi digitali
+   - Esposizione valore
+   
 - Irrigazione
    - Replica integrale di tutte le funzioni esposte in lettura e scrittura
+   
 - Contatori energetici
+   - Energia prodotta / consumata esposta dal sistema
+
 - Centrale d'allarme intrusioni
    - Aree
    - Ingressi
@@ -41,19 +56,34 @@ Attualmente supportati:
    - Notifiche di trigger e allarmi
    - Silenziamento sirene
    - Cancellazione memoria eventi
+   
 - Luci
+   - On/Off
+   - Dimmers
+   - RGB
+   
 - Controllo carichi
    - Replica integrale di tutte le funzioni esposte in lettura e scrittura
+   
 - Aperture
+   - Persiane / Tende
+   
 - Scenari
+   - Attivazione
+   - registrazione
+   - Stati esposti: acceso, spento, in transizione
+   
 - Programmazione oraria
+   - gestione completa dei 4 slot temporali programmabili
+   
 - TVCC
+   - Esposizione dei flussi video come entità camera
 
 Servizi aggiuntivi:
 
 - Notifiche di stato offline/online del server ETI/DOMO
 - Log settimanale degli eventi di sicurezza
-- Backup locale e ripristino di tutti i profili termici ti tutti i termostati per entrambe le stagioni
+- Backup locale e ripristino di tutti i profili termici di tutti i termostati per entrambe le stagioni
 ---
 
 ## Come funziona

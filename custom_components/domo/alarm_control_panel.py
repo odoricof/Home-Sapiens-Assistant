@@ -33,19 +33,12 @@ from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
 from .platforms.sicu import get_security_device
-
+from .services.i18n import async_get_translated_strings
 
 _LOGGER = logging.getLogger(__name__)
 
 
 PENDING_ARM_DELAY = 30
-STATE_LABELS = {
-    AlarmControlPanelState.ARMED_AWAY: "ATTIVO FUORI CASA",
-    AlarmControlPanelState.ARMED_NIGHT: "ATTIVO NOTTE",
-    AlarmControlPanelState.ARMED_HOME: "ATTIVO IN CASA",
-    AlarmControlPanelState.ARMED_CUSTOM_BYPASS: "ATTIVO PARZIALMENTE",
-    AlarmControlPanelState.DISARMED: "DISATTIVO",
-}
 
 
 # ============================================================
@@ -162,7 +155,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
 
                     violated_inputs.append({
                         "name": inp.get("name", f"input_{inp.get('input_id')}"),
-                        "area": ", ".join(area_names) if area_names else "Sconosciuta"
+                        "area_names": area_names,
                     })
 
             if violated_inputs and not self._alarm_notified:
@@ -430,12 +423,32 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
     # ============================================================
     async def _send_alarm_notifications(self, violated_inputs):
         """Send push and persistent notifications for the alarm."""
+        strings = await async_get_translated_strings(self.hass, "sicu_notifications")
+        unknown_area = strings.get("unknown_area", "Unknown")
+        title = strings.get("alarm_triggered.title", "🚨 ALARM IN PROGRESS!")        
+        
         now = datetime.now().strftime("%H:%M")
+        
+        def _area(i):
+            return ", ".join(i["area_names"]) if i["area_names"] else unknown_area
+
         if len(violated_inputs) == 1:
-            msg = f"Sensore violato: {violated_inputs[0]['name']} (area {violated_inputs[0]['area']}) - {now}"
+            template = strings.get(
+                "alarm_triggered.message_single",
+                "Sensor triggered: {sensor} (area {area}) - {time}",
+            )
+            msg = template.format(
+                sensor=violated_inputs[0]["name"],
+                area=_area(violated_inputs[0]),
+                time=now,
+            )
         else:
-            sensori = [f"{i['name']} (area {i['area']})" for i in violated_inputs]
-            msg = f"Sensori violati: {', '.join(sensori)} - {now}"
+            template = strings.get(
+                "alarm_triggered.message_multiple",
+                "Sensors triggered: {sensors} - {time}",
+            )
+            sensori = [f"{i['name']} (area {_area(i)})" for i in violated_inputs]
+            msg = template.format(sensors=", ".join(sensori), time=now)
 
         all_services = self.hass.services.async_services()
         mobile_app_services = [
@@ -450,7 +463,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
                         "notify",
                         service,
                         {
-                            "title": "🚨 ALLARME IN CORSO!",
+                            "title": title,
                             "message": msg,
                             "data": {
                                 "priority": "high",
@@ -481,7 +494,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
                 "persistent_notification",
                 "create",
                 {
-                    "title": "🚨 ALLARME IN CORSO!",
+                    "title": title,
                     "message": msg,
                     "notification_id": self._alarm_notification_id
                 },
@@ -492,10 +505,13 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
 
     async def _send_state_change_notification(self, state) -> None:
         """Send a push notification on panel state change."""
-        label = STATE_LABELS.get(state, str(state))
+        strings = await async_get_translated_strings(self.hass, "sicu_notifications")
+        state_value = getattr(state, "value", str(state))
+        label = strings.get(f"state_labels.{state_value}", state_value)
+        title = strings.get("state_change.title", "🛡️ SECURITY PANEL")
         now = datetime.now().strftime("%H:%M")
-        title = "🛡️ CENTRALE ANTIFURTO"
-        msg = f"Stato: {label} - {now}"
+        template = strings.get("state_change.message", "State: {state} - {time}")
+        msg = template.format(state=label, time=now)
 
         all_services = self.hass.services.async_services()
         mobile_app_services = [
@@ -526,8 +542,15 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
 
     async def _send_pending_arm_notification(self, not_ready_areas):
         """Send push/persistent notification for a pending arm with open inputs."""
-        aree = ", ".join(not_ready_areas) if not_ready_areas else "sconosciuta"
-        msg = f"Attenzione: inserimento in corso con ingressi aperti (area: {aree})"
+        strings = await async_get_translated_strings(self.hass, "sicu_notifications")
+        unknown_area = strings.get("unknown_area", "Unknown")
+        title = strings.get("pending_arm.title", "⚠️ ARMING PENDING")
+        template = strings.get(
+            "pending_arm.message",
+            "Warning: arming in progress with open inputs (area: {areas})",
+        )
+        aree = ", ".join(not_ready_areas) if not_ready_areas else unknown_area
+        msg = template.format(areas=aree)
 
         all_services = self.hass.services.async_services()
         mobile_app_services = [
@@ -542,7 +565,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
                         "notify",
                         service,
                         {
-                            "title": "⚠️ INSERIMENTO IN ATTESA",
+                            "title": title,
                             "message": msg,
                             "data": {
                                 "priority": "high",
@@ -562,7 +585,7 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
                 "persistent_notification",
                 "create",
                 {
-                    "title": "⚠️ INSERIMENTO IN ATTESA",
+                    "title": title,
                     "message": msg,
                     "notification_id": self._pending_arm_notification_id
                 },
@@ -611,32 +634,6 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
     async def async_added_to_hass(self):
         """When entity is added to hass."""
         _LOGGER.debug("SECURITY PANEL added to hass | entity_id=%s", self.entity_id)
-
-        if not self.hass.services.has_service(DOMAIN, "security_panel_action"):
-            async def async_security_panel_action(call):
-                entity_id = call.data.get("entity_id")
-                action = call.data.get("action")
-                code = call.data.get("code")
-
-                _LOGGER.debug(
-                    "security_panel_action called | entity_id=%s | action=%s | target=%s | my_entity_id=%s",
-                    entity_id, action, entity_id, self.entity_id,
-                )
-
-                if entity_id != self.entity_id:
-                    _LOGGER.debug("Entity id mismatch | got=%s | expected=%s", entity_id, self.entity_id)
-                    return
-
-                if action == "reset_event_memory":
-                    await self.reset_event_memory(code)
-                elif action == "silence":
-                    await self.silence(code)
-
-            self.hass.services.async_register(
-                DOMAIN,
-                "security_panel_action",
-                async_security_panel_action,
-            )
 
         self.async_on_remove(
             async_dispatcher_connect(

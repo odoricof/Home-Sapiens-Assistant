@@ -36,19 +36,23 @@ _LOGGER = logging.getLogger(__name__)
 # ============================================================
 
 _SCENARIO_ROLE_KEYWORDS: dict[str, list[str]] = {
-    "armed_away": ["esco", "fuori casa"],
-    "armed_night": ["notte", "letto"],
-    "armed_home": ["resto", "in casa"],
+    "armed_away": ["esco", "fuori casa", "going out", "out", "sortir chez", "sortir", "abwesend", "weg", "fuera", "salir", "ухожу", "вне дома"],
+    "armed_night": ["notte", "letto", "going to bed", "bed", "aller au lit", "lit", "nacht", "schlafen", "noche", "dormir", "ночь", "сон"],
+    "armed_home": ["resto", "in casa", "staying home", "home", "rester chez", "rester", "zuhause", "bleibe", "casa", "quedo", "дома", "остаюсь"],
 }
 
 
 def _match_scenario_role(name: str | None) -> str | None:
     """Deduce il ruolo (armed_away/night/home) dal nome scenario della centrale."""
     upper = (name or "").upper()
+    best_role = None
+    best_len = 0
     for role, keywords in _SCENARIO_ROLE_KEYWORDS.items():
-        if any(kw.upper() in upper for kw in keywords):
-            return role
-    return None
+        for kw in keywords:
+            if kw.upper() in upper and len(kw) > best_len:
+                best_role = role
+                best_len = len(kw)
+    return best_role
 
 
 # ============================================================
@@ -77,38 +81,32 @@ CENTRAL_STATUS_MAP = {
     14336: "tempo_uscita_con_eventi_memorizzati",
 }
 
-AREA_STATUS_MAP = {
-    # proxinet
-    32: "Non pronta",
-    33: "Inserimento con ingressi aperti",
-    34: "Apertura ingresso in attesa disarmo",
-    36: "Intrusione rilevata e ingressi aperti",
-    40: "Pronta",
-    41: "Inserimento in corso",
-    42: "Inserita",
-    38: "Allarme intrusione in corso",
-    46: "Intrusione rilevata",
-    44: "Memoria allarme",
-    96: "Ingressi aperti e ingressi esclusi",
-    104: "Pronta con ingressi esclusi",
-
-    # pxc
-    48: "Non pronta",
-    56: "Pronta",
-    58: "Inserita",
-    60: "Memoria allarme",
-    182: "Allarme intrusione in corso",
-    190: "Sconosciuto",
-}
+# raw proxinet, raw pxc = status
+_AREA_STATUS_GROUPS = (
+    ((32, 48), "not_ready"),
+    ((33,), "arming_open_inputs"),
+    ((34,), "input_open_pending_disarm"),
+    ((36,), "intrusion_open_inputs"),
+    ((40, 56), "ready"),
+    ((41,), "arming"),
+    ((42, 58), "armed"),
+    ((38, 182), "intrusion_alarm"),
+    ((46,), "intrusion_detected"),
+    ((44, 60), "alarm_memory"),
+    ((96,), "open_and_bypassed"),
+    ((104,), "ready_bypassed"),
+    ((190,), "unknown"),
+)
+AREA_STATUS_MAP = {code: status for codes, status in _AREA_STATUS_GROUPS for code in codes}
 
 INPUT_STATUS_MAP = {
-    1: "Chiuso",
-    5: "Escluso",
-    9: "Memoria allarme",
-    16: "Sconosciuto",
-    17: "Aperto",
-    25: "Allarme",
-    65: "Batteria scarica",
+    1: "closed",
+    5: "bypassed",
+    9: "alarm_memory",
+    16: "unknown",
+    17: "open",
+    25: "alarm",
+    65: "low_battery",
 }
 
 AREA_NOT_READY_STATUS = {32, 33, 48, 96}
@@ -200,6 +198,51 @@ async def discover_security(gateway):
     except Exception as err:
         _LOGGER.error("SECURITY ricerca centrale fallita: %s", err)
         return None
+
+
+# ============================================================
+# ===== RESYNC AL RECONNECT =====
+# ============================================================
+
+async def refresh_all_security(gateway):
+    """Risincronizza aree/ingressi/uscite/scenari dopo un reconnect del gateway."""
+
+    if _SECURITY_DEVICE is None:
+        _LOGGER.debug("SECURITY refresh_all ignorato: centrale non ancora scoperta")
+        return
+
+    central_id = _SECURITY_DEVICE.central_id or 0
+
+    areas_resp = await gateway.tx_command({
+        "appl_msg_type": "sicu",
+        "cmd_name": "sicu_areas_list_req",
+        "central_id": central_id
+    }, resp_command=None)
+
+    inputs_resp = await gateway.tx_command({
+        "appl_msg_type": "sicu",
+        "cmd_name": "sicu_inputs_list_req",
+        "central_id": central_id
+    }, resp_command=None)
+
+    outputs_resp = await gateway.tx_command({
+        "appl_msg_type": "sicu",
+        "cmd_name": "sicu_outputs_list_req",
+        "central_id": central_id
+    }, resp_command=None)
+
+    scenarios_resp = await gateway.tx_command({
+        "appl_msg_type": "sicu",
+        "cmd_name": "sicu_scenarios_list_req",
+        "central_id": central_id
+    }, resp_command=None)
+
+    updated_count = 0
+    for resp in (areas_resp, inputs_resp, outputs_resp, scenarios_resp):
+        if resp and await _SECURITY_DEVICE.update(resp):
+            updated_count += 1
+
+    _LOGGER.info("SECURITY refresh_all completato | risposte aggiornate=%s/4", updated_count)
 
 
 # ============================================================

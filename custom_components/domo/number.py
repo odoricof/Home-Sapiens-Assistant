@@ -24,10 +24,12 @@ from homeassistant.components.number import NumberDeviceClass, NumberEntity, Num
 from homeassistant.const import EntityCategory, PERCENTAGE, UnitOfPower, UnitOfTemperature, UnitOfTime
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN, SIGNAL_DISCOVERY_NEW, SIGNAL_UPDATE_ENTITY
+from .services.i18n import async_get_translated_strings
 from .platforms.irrigation import (
     DomoIrrigationZone,
     get_all_irrigation_zones,
@@ -52,7 +54,7 @@ _PROFILE_ATTRS: dict[str, tuple[str | None, str | None, float, float, float, str
     "t1": ("T1", None, 5.0, 35.0, 0.1, NumberMode.BOX),
     "t2": ("T2", None, 5.0, 35.0, 0.1, NumberMode.BOX),
     "t3": ("T3", None, 5.0, 35.0, 0.1, NumberMode.BOX),
-    "antifreeze": ("Antigelo", "mdi:snowflake-thermometer", 3.0, 8.0, 0.5, NumberMode.SLIDER),
+    "antifreeze": (None, "mdi:snowflake-thermometer", 3.0, 8.0, 0.5, NumberMode.SLIDER),
 }
 
 
@@ -149,8 +151,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
             return
         loadsctrl_added_ids.add(meter.meter_id)
         entities = [
-            DomoLoadCtrlMaxPowerNumber(meter),
-            DomoLoadCtrlHysteresisNumber(meter),
+            DomoLoadCtrlMaxPowerNumber(hass, meter, entry.entry_id),
+            DomoLoadCtrlHysteresisNumber(hass, meter, entry.entry_id),
         ]
         async_add_entities(entities)
         _LOGGER.info(
@@ -206,17 +208,20 @@ class DomoThermostatProfileNumber(NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         value = self._enforce_profile_order(value)
+        translated = await async_get_translated_strings(self.hass, "thermoregulation_entities")
 
         try:
             ok = await self._thermostat.async_set_thermal_profile_value(self._attr_key, value)
         except ValueError as err:
             raise HomeAssistantError(str(err)) from err
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio thermo_zone_config_req: {err}") from err
+            raise HomeAssistantError(
+                translated["action_feedback.algo_mode_send_error"].format(err=err)
+            ) from err
 
         if not ok:
             raise HomeAssistantError(
-                "Comando ignorato: profilo termico non ancora completo per questo termostato."
+                translated["action_feedback.command_ignored_profile_incomplete"]
             )
 
     def _enforce_profile_order(self, value: float) -> float:
@@ -241,6 +246,9 @@ class DomoThermostatProfileNumber(NumberEntity):
         return max(self._attr_native_min_value, min(self._attr_native_max_value, value))
 
     async def async_added_to_hass(self):
+        if self._attr_key == "antifreeze":
+            translated = await async_get_translated_strings(self.hass, "thermoregulation_entities")
+            self._attr_name = translated.get("entity_names.antifreeze", "Antifreeze")
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -263,7 +271,7 @@ class DomoThermostatDiffNumber(NumberEntity):
     _attr_native_max_value = 2.0
     _attr_native_step = 0.1
     _attr_icon = "mdi:delta"
-    _attr_name = "Differenziale termico"
+    _attr_name = "Thermal differential"
 
     def __init__(self, thermostat: DomoThermostat, entry_id: str):
         self._thermostat = thermostat
@@ -277,17 +285,22 @@ class DomoThermostatDiffNumber(NumberEntity):
         return self._thermostat.diff_t_dec
 
     async def async_set_native_value(self, value: float) -> None:
+        translated = await async_get_translated_strings(self.hass, "thermoregulation_entities")
         try:
             ok = await self._thermostat.async_set_diff_t_dec(value)
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio thermo_zone_config_req: {err}") from err
+            raise HomeAssistantError(
+                translated["action_feedback.algo_mode_send_error"].format(err=err)
+            ) from err
 
         if not ok:
             raise HomeAssistantError(
-                "Comando ignorato: profilo termico non ancora completo per questo termostato."
+                translated["action_feedback.command_ignored_profile_incomplete"]
             )
 
     async def async_added_to_hass(self):
+        translated = await async_get_translated_strings(self.hass, "thermoregulation_entities")
+        self._attr_name = translated.get("entity_names.differential", self._attr_name)
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -326,7 +339,7 @@ class DomoIrrigationPercNumber(NumberEntity):
     def __init__(self, zone: DomoIrrigationZone, entry_id: str):
         self._zone = zone
         self._attr_unique_id = f"domo_irrigation_{zone.zone_id}_perc"
-        self._attr_name = "% STAGIONALE"
+        self._attr_name = "Seasonal %"
         self._attr_device_info = _irrigation_zone_device_info(zone, entry_id)
 
     @property
@@ -339,11 +352,14 @@ class DomoIrrigationPercNumber(NumberEntity):
                 self._zone.zone_id, int(value), self._zone.gateway
             )
         except Exception as err:
+            translated = await async_get_translated_strings(self.hass, "irrigation_entities")
             raise HomeAssistantError(
-                f"Errore invio irrigation_set_req (perc): {err}"
+                translated["action_feedback.send_error"].format(err=err)
             ) from err
 
     async def async_added_to_hass(self):
+        translated = await async_get_translated_strings(self.hass, "irrigation_entities")
+        self._attr_name = translated.get("entity_names.seasonal_percentage", self._attr_name)
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -376,7 +392,7 @@ class DomoIrrigationActiveNumber(NumberEntity):
     def __init__(self, sprinkler: DomoSprinkler, entry_id: str):
         self._sprinkler = sprinkler
         self._attr_unique_id = f"{sprinkler.unique_id}_active"
-        self._attr_name = f"{sprinkler.name} Tempo max irrigazione"
+        self._attr_name = f"{sprinkler.name} Max irrigation time"
         self._attr_device_info = _sprinkler_device_info(sprinkler, entry_id)
 
     @property
@@ -426,9 +442,15 @@ class DomoIrrigationActiveNumber(NumberEntity):
                 self._sprinkler.zone_id, self._sprinkler.act_id, seconds, self._sprinkler.gateway
             )
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio irrigation_set_req (active): {err}") from err
+            translated = await async_get_translated_strings(self.hass, "irrigation_entities")
+            raise HomeAssistantError(
+                translated["action_feedback.send_error"].format(err=err)
+            ) from err
 
     async def async_added_to_hass(self):
+        translated = await async_get_translated_strings(self.hass, "irrigation_entities")
+        suffix = translated.get("entity_names.active_time", "Max irrigation time")
+        self._attr_name = f"{self._sprinkler.name} {suffix}"
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -454,7 +476,7 @@ class DomoIrrigationDutyNumber(NumberEntity):
     def __init__(self, sprinkler: DomoSprinkler, entry_id: str):
         self._sprinkler = sprinkler
         self._attr_unique_id = f"{sprinkler.unique_id}_duty"
-        self._attr_name = f"{sprinkler.name} Ciclo di lavoro"
+        self._attr_name = f"{sprinkler.name} Duty cycle"
         self._attr_device_info = _sprinkler_device_info(sprinkler, entry_id)
 
     @property
@@ -467,9 +489,15 @@ class DomoIrrigationDutyNumber(NumberEntity):
                 self._sprinkler.zone_id, self._sprinkler.act_id, int(round(value)), self._sprinkler.gateway
             )
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio irrigation_set_req (duty): {err}") from err
+            translated = await async_get_translated_strings(self.hass, "irrigation_entities")
+            raise HomeAssistantError(
+                translated["action_feedback.send_error"].format(err=err)
+            ) from err
 
     async def async_added_to_hass(self):
+        translated = await async_get_translated_strings(self.hass, "irrigation_entities")
+        suffix = translated.get("entity_names.duty_cycle", "Duty cycle")
+        self._attr_name = f"{self._sprinkler.name} {suffix}"
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -484,15 +512,22 @@ class DomoIrrigationDutyNumber(NumberEntity):
 # ===== LOAD CONTROL =====
 # ============================================================
 
-def _loadsctrl_meter_device_info(meter: DomoLoadCtrlMeter) -> DeviceInfo:
+def _loadsctrl_meter_device_info(hass, meter: DomoLoadCtrlMeter, entry_id: str) -> DeviceInfo:
     """DeviceInfo of the load control manager."""
-    return DeviceInfo(
+    device_info = DeviceInfo(
         identifiers={(DOMAIN, meter.unique_id)},
         name=meter.name,
         manufacturer="Home Sapiens Assistant",
         model="Eti/Domo",
-        via_device=(DOMAIN, "loadsctrl_root"),
     )
+
+    parent_device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, "loadsctrl_root"), entry_id
+    )
+    if parent_device is not None:
+        device_info["via_device_id"] = parent_device.id
+
+    return device_info
 
 
 class DomoLoadCtrlMaxPowerNumber(NumberEntity):
@@ -507,12 +542,12 @@ class DomoLoadCtrlMaxPowerNumber(NumberEntity):
     _attr_native_max_value = 10.0
     _attr_native_step = 0.2
     _attr_icon = "mdi:gauge-full"
-    _attr_name = "Fondo scala"
+    _attr_name = "Full scale"
 
-    def __init__(self, meter: DomoLoadCtrlMeter):
+    def __init__(self, hass, meter: DomoLoadCtrlMeter, entry_id: str):
         self._meter = meter
         self._attr_unique_id = f"{meter.unique_id}_max_power"
-        self._attr_device_info = _loadsctrl_meter_device_info(meter)
+        self._attr_device_info = _loadsctrl_meter_device_info(hass, meter, entry_id)
 
     @property
     def native_value(self) -> float | None:
@@ -525,9 +560,14 @@ class DomoLoadCtrlMaxPowerNumber(NumberEntity):
                 self._meter.meter_id, watts, self._meter.gateway
             )
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio loadsctrl_meter_set_req (max_power): {err}") from err
+            translated = await async_get_translated_strings(self.hass, "loadsctrl_entities")
+            raise HomeAssistantError(
+                translated["action_feedback.send_error"].format(err=err)
+            ) from err
 
     async def async_added_to_hass(self):
+        translated = await async_get_translated_strings(self.hass, "loadsctrl_entities")
+        self._attr_name = translated.get("entity_names.max_power", self._attr_name)
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
@@ -550,12 +590,12 @@ class DomoLoadCtrlHysteresisNumber(NumberEntity):
     _attr_native_max_value = 2.0
     _attr_native_step = 0.2
     _attr_icon = "mdi:delta"
-    _attr_name = "Isteresi"
+    _attr_name = "Hysteresis"
 
-    def __init__(self, meter: DomoLoadCtrlMeter):
+    def __init__(self, hass, meter: DomoLoadCtrlMeter, entry_id: str):
         self._meter = meter
         self._attr_unique_id = f"{meter.unique_id}_hysteresis"
-        self._attr_device_info = _loadsctrl_meter_device_info(meter)
+        self._attr_device_info = _loadsctrl_meter_device_info(hass, meter, entry_id)
 
     @property
     def native_value(self) -> float | None:
@@ -568,9 +608,14 @@ class DomoLoadCtrlHysteresisNumber(NumberEntity):
                 self._meter.meter_id, watts, self._meter.gateway
             )
         except Exception as err:
-            raise HomeAssistantError(f"Errore invio loadsctrl_meter_set_req (hysteresis): {err}") from err
+            translated = await async_get_translated_strings(self.hass, "loadsctrl_entities")
+            raise HomeAssistantError(
+                translated["action_feedback.send_error"].format(err=err)
+            ) from err
 
     async def async_added_to_hass(self):
+        translated = await async_get_translated_strings(self.hass, "loadsctrl_entities")
+        self._attr_name = translated.get("entity_names.hysteresis", self._attr_name)
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )
