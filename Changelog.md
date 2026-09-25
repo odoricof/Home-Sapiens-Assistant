@@ -7,114 +7,64 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [1.0.0] - 2026-03-12
+## [2.0.0] - 2026-09-25
+
+> # 🌍 **HOME SAPIENS ASSISTANT IS NOW MULTILINGUAL!**
+>
+> The integration now speaks **Italian, English, German, Spanish, French, and Russian**.
+> Notifications, states, and entity names automatically follow the language configured in Home Assistant.
 
 ### 🚀 Features
 
-- Initial public release of the **ETI/DOMO integration for Home Assistant**
-- Gateway of communication with ETI/Domo systems through the **Home Sapiens web interface**
-
-#### Supported platforms
-- Activations
-- Analogic inputs
-- Climate control
-- Energy meters
-- Fan coils
-- Intrusion alarm panel
-- Lights
-- Scenes
-
-## [1.1.0] - 2026-04-04
-
-### 🚀 Features
-
-#### Supported platforms
-- TVCC
-- Openings
-- Digital inputs
-
-## [1.1.1] - 2026-04-09
+- Home Sapiens Assistant now supports a **multilingual interface**: notifications, entity states, and names are displayed in the language configured in Home Assistant, with automatic fallback to English when a translation is unavailable. Currently supported languages: **Italian, English, German, Spanish, French, Russian**.
 
 ### 🐛 Bug Fixes
 
-## [1.2.0] - 2026-04-12
+- Resolved an issue where, after a power loss on the ETI/Domo (with Home Assistant staying up on UPS), some entities could show a stale state until a manual action was performed. On gateway reconnect, states are now automatically resynced.
+
+- Fixed device registry deprecations ahead of Home Assistant 2027.8.0: replaced via_device with via_device_id in number.py, sensor.py, switch.py, text.py, binary_sensor.py, and climate.py; replaced async_get_device with async_get_device_by_identifier in sensor.py, number.py, switch.py, text.py.
+
+### ⚠️ Breaking changes
+
+- Entity names, select options, and presets now follow the HA language, with a fallback to English. Automations using the old Italian strings must be updated if HA is not set to Italian. 
+- Upgrade from older versions: users coming from a version older than 1.8.0 must first install version 1.8.0.
+
+## [1.8.0] - 2026-08-20
 
 ### 🚀 Features
 
-- Security Areas
-- Security Inputs
-- security Outputs
+#### Climate - Thermal profile copy/paste - Jolly profile, Plant off mode
 
-## [1.3.0] - 2026-04-12
+- Added "Copy thermal profile to" select for each thermostat: allows copying the currently selected day's profile to another specific day or to the entire week.
+- Jolly profile management now exposed as a preset mode on the climate card
+- When the system is off, the climate card no longer shows unusable buttons.
+
+#### New Load Control platform
+
+- Complete read/write management of controlled loads, exposing entities: load enable, weekly energy profile, full scale, hysteresis, power sensor.
+
+![loads](images/loads1.png)
+![loads](images/loads2.png)
+
+## [1.7.0] - 2026-08-02
+
+### 🎉 Distribution News
+
+- The integration has been added to the official HACS catalog.<br>
+From now on it can be installed with a simple search, without any additional configuration needed.
 
 ### 🚀 Features
 
-- Offline/Online status notifications for the ETI/DOMO server
+![alarm](images/alarm.png)
 
-## [1.3.1] - 2026-06-21
+- Alarm Silencing: New command to silence the alarm siren directly from Home Assistant, by entering your code into a dedicated text entity.
+
+- Alarm vent Memory Reset: New command to clear the alarm event memory recorded by the control panel, directly from Home Assistant, by entering your code into a dedicated text entity.
 
 ### 🐛 Bug Fixes
 
-- Correct thermostat summer mode
+- SecurityEventsLogger now uses a portable log path via hass.config.path() instead of a hardcoded /config path, and file I/O (directory creation, log writes) now runs in an executor to avoid blocking the event loop.
 
-## [1.4.0] - 2026-07-11
-
-### 🚀 Features
-
-#### Automatic Thermal Profile added fature
-
-- **Thermal profile exposure** for climate entities
-- **Readable profile decoding**: new `thermal_profile_schedule` attribute that condenses the 96 quarter-hour slots into compressed time ranges (e.g. `00:00-09:00: t3 | 30.0°C`), one line per range, ready for quick consultation and automations.
-- **Currently active set-point**: new `scheduled_setpoint` attribute, calculated in real time from the thermal profile according to the current time — useful to know "what temperature it should be right now" without having to consult the scheduler.
-- **More readable state attributes**: `mode` and `status` now return textual labels instead of raw numeric codes.
-- **Automatic profile refresh on restart**: thermostats already in AUTO mode now actively request the complete thermal profile and expose it immediately.
-
-#### Interaction with the Climate Card added feature
-
-- **AUTO mode now displays the scheduled set-point** on the native card (number + slider), instead of only showing the text "Automatic" — consistent with the standard behavior of other Home Assistant climate integrations.
-- **OFF mode (winter only) displays the antifreeze value** (`antifreeze`) on the card, instead of blocking all interaction. In summer it remains "Off" without a slider, since the concept of antifreeze does not apply to cooling.
-- **Assisted interaction**: if the user moves the slider while the thermostat is in AUTO or OFF mode (OFF only in winter), the thermostat automatically switches to **manual** mode and immediately applies the requested temperature, with a single call to the gateway (mode + set_point in a single command).
-- New `antifreeze` (°C) attribute exposed on the entity.
-
-### 🐛 Bug Fixes 
-
-- **Merge pull request #4 from brokkolo/patch-1**: Fix false 0°C history dips: climate entities defaulted temp_dec/set_point to 0/200 instead of None
-
-## [1.5.0] - 2026-07-17
-
-### 🚀 Features
-
-#### Alarm Panel
-
-Handling of arming when one or more areas of the requested scenario are not ready (open inputs), to prevent the alarm from triggering immediately.
-
-##### Implemented Behavior
-
-When the user requests arming (arm_home / arm_night / arm_away) and one or more areas involved in the scenario are not ready:
-
-1. The command is **not** sent immediately to the control panel.
-2. A **30-second** wait period begins, during which the entity shows ARMING status.
-3. A push notification is sent to all mobile devices along with a persistent notification in Home Assistant: *"⚠️ Arming pending"*.
-4. If areas become ready before the 30s elapse → arming proceeds immediately and the notification is dismissed.
-5. If 30s expire and areas are still not ready → arming **is still executed**, as requested by the user who was warned.
-6. If the user sends disarm during the wait → the arming request is canceled, no command is ever sent to the control panel. The persistent notification is dismissed; the push notification remains on the phone until manually cleared by the user (explicit choice, no automatic recall).
-
-##### Push Notifications for Alarm Panel State Changes
-
-1. Added push notification system that informs the user of every state change of the control panel.
-
-#### Timer management (Scheduler platform)
-
-![Scheduler](images/scheduler.png)
-
-1. Expose CAME activation (relay) timers/schedules as entity attributes
- #2
-
-### 🐛 Bug Fixes
-
-- [Bug] alarm_control_panel state stuck at "unknown" after restart — central status never queried during discovery
- #3
- 
 ## [1.6.0] - 2026-07-26
 
 ### 🚀 Features
@@ -189,60 +139,115 @@ The following parameters are now exposed for both reading and writing:
 - Fixed an issue where, on some systems, the app could display the wrong button instead of "Stay at Home" (e.g. "Night"). The system now recognizes each scenario by its actual name configured in the control panel, rather than by assuming a fixed order.
 - Added automatic detection of any custom scenario configured in the control panel, which was previously not handled.
 
-## [1.7.0] - 2026-08-02
-
-### 🎉 Distribution News
-
-- The integration has been added to the official HACS catalog.<br>
-From now on it can be installed with a simple search, without any additional configuration needed.
+## [1.5.0] - 2026-07-17
 
 ### 🚀 Features
 
-![alarm](images/alarm.png)
+#### Alarm Panel
 
-- Alarm Silencing: New command to silence the alarm siren directly from Home Assistant, by entering your code into a dedicated text entity.
+Handling of arming when one or more areas of the requested scenario are not ready (open inputs), to prevent the alarm from triggering immediately.
 
-- Alarm vent Memory Reset: New command to clear the alarm event memory recorded by the control panel, directly from Home Assistant, by entering your code into a dedicated text entity.
+##### Implemented Behavior
+
+When the user requests arming (arm_home / arm_night / arm_away) and one or more areas involved in the scenario are not ready:
+
+1. The command is **not** sent immediately to the control panel.
+2. A **30-second** wait period begins, during which the entity shows ARMING status.
+3. A push notification is sent to all mobile devices along with a persistent notification in Home Assistant: *"⚠️ Arming pending"*.
+4. If areas become ready before the 30s elapse → arming proceeds immediately and the notification is dismissed.
+5. If 30s expire and areas are still not ready → arming **is still executed**, as requested by the user who was warned.
+6. If the user sends disarm during the wait → the arming request is canceled, no command is ever sent to the control panel. The persistent notification is dismissed; the push notification remains on the phone until manually cleared by the user (explicit choice, no automatic recall).
+
+##### Push Notifications for Alarm Panel State Changes
+
+1. Added push notification system that informs the user of every state change of the control panel.
+
+#### Timer management (Scheduler platform)
+
+![Scheduler](images/scheduler.png)
+
+1. Expose CAME activation (relay) timers/schedules as entity attributes
+ #2
 
 ### 🐛 Bug Fixes
 
-- SecurityEventsLogger now uses a portable log path via hass.config.path() instead of a hardcoded /config path, and file I/O (directory creation, log writes) now runs in an executor to avoid blocking the event loop.
+- [Bug] alarm_control_panel state stuck at "unknown" after restart — central status never queried during discovery
+ #3
 
-## [1.8.0] - 2026-08-20
-
-### 🚀 Features
-
-#### Climate - Thermal profile copy/paste - Jolly profile, Plant off mode
-
-- Added "Copy thermal profile to" select for each thermostat: allows copying the currently selected day's profile to another specific day or to the entire week.
-- Jolly profile management now exposed as a preset mode on the climate card
-- When the system is off, the climate card no longer shows unusable buttons.
-
-#### New Load Control platform
-
-- Complete read/write management of controlled loads, exposing entities: load enable, weekly energy profile, full scale, hysteresis, power sensor.
-
-![loads](images/loads1.png)
-![loads](images/loads2.png)
-
-## [2.0.0] - 2026-09-25
-
-> # 🌍 **HOME SAPIENS ASSISTANT IS NOW MULTILINGUAL!**
->
-> The integration now speaks **Italian, English, German, Spanish, French, and Russian**.
-> Notifications, states, and entity names automatically follow the language configured in Home Assistant.
+## [1.4.0] - 2026-07-11
 
 ### 🚀 Features
 
-- Home Sapiens Assistant now supports a **multilingual interface**: notifications, entity states, and names are displayed in the language configured in Home Assistant, with automatic fallback to English when a translation is unavailable. Currently supported languages: **Italian, English, German, Spanish, French, Russian**.
+#### Automatic Thermal Profile added fature
+
+- **Thermal profile exposure** for climate entities
+- **Readable profile decoding**: new `thermal_profile_schedule` attribute that condenses the 96 quarter-hour slots into compressed time ranges (e.g. `00:00-09:00: t3 | 30.0°C`), one line per range, ready for quick consultation and automations.
+- **Currently active set-point**: new `scheduled_setpoint` attribute, calculated in real time from the thermal profile according to the current time — useful to know "what temperature it should be right now" without having to consult the scheduler.
+- **More readable state attributes**: `mode` and `status` now return textual labels instead of raw numeric codes.
+- **Automatic profile refresh on restart**: thermostats already in AUTO mode now actively request the complete thermal profile and expose it immediately.
+
+#### Interaction with the Climate Card added feature
+
+- **AUTO mode now displays the scheduled set-point** on the native card (number + slider), instead of only showing the text "Automatic" — consistent with the standard behavior of other Home Assistant climate integrations.
+- **OFF mode (winter only) displays the antifreeze value** (`antifreeze`) on the card, instead of blocking all interaction. In summer it remains "Off" without a slider, since the concept of antifreeze does not apply to cooling.
+- **Assisted interaction**: if the user moves the slider while the thermostat is in AUTO or OFF mode (OFF only in winter), the thermostat automatically switches to **manual** mode and immediately applies the requested temperature, with a single call to the gateway (mode + set_point in a single command).
+- New `antifreeze` (°C) attribute exposed on the entity.
+
+### 🐛 Bug Fixes 
+
+- **Merge pull request #4 from brokkolo/patch-1**: Fix false 0°C history dips: climate entities defaulted temp_dec/set_point to 0/200 instead of None
+
+## [1.3.1] - 2026-06-21
 
 ### 🐛 Bug Fixes
 
-- Resolved an issue where, after a power loss on the ETI/Domo (with Home Assistant staying up on UPS), some entities could show a stale state until a manual action was performed. On gateway reconnect, states are now automatically resynced.
+- Correct thermostat summer mode
 
-- Fixed device registry deprecations ahead of Home Assistant 2027.8.0: replaced via_device with via_device_id in number.py, sensor.py, switch.py, text.py, binary_sensor.py, and climate.py; replaced async_get_device with async_get_device_by_identifier in sensor.py, number.py, switch.py, text.py.
+## [1.3.0] - 2026-04-12
 
-### ⚠️ Breaking changes
+### 🚀 Features
 
-- Entity names, select options, and presets now follow the HA language, with a fallback to English. Automations using the old Italian strings must be updated if HA is not set to Italian. 
-- Upgrade from older versions: users coming from a version older than 1.8.0 must first install version 1.8.0.
+- Offline/Online status notifications for the ETI/DOMO server
+
+## [1.2.0] - 2026-04-12
+
+### 🚀 Features
+
+- Security Areas
+- Security Inputs
+- security Outputs
+
+## [1.1.1] - 2026-04-09
+
+### 🐛 Bug Fixes
+
+- Minor fix
+
+## [1.1.0] - 2026-04-04
+
+### 🚀 Features
+
+#### Supported platforms
+- TVCC
+- Openings
+- Digital inputs
+
+## [1.0.0] - 2026-03-12
+
+### 🚀 Features
+
+- Initial public release of the **ETI/DOMO integration for Home Assistant**
+- Gateway of communication with ETI/Domo systems through the **Home Sapiens web interface**
+
+#### Supported platforms
+- Activations
+- Analogic inputs
+- Climate control
+- Energy meters
+- Fan coils
+- Intrusion alarm panel
+- Lights
+- Scenes
+
+
+

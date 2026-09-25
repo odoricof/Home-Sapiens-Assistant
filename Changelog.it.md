@@ -7,114 +7,64 @@ Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
 ---
 
-## [1.0.0] - 2026-03-12
+## [2.0.0] - 2026-09-25
+
+> # 🌍 **HOME SAPIENS ASSISTANT È ORA MULTILINGUA!**
+>
+> L'integrazione ora parla **italiano, inglese, tedesco, spagnolo, francese e russo**.
+> Notifiche, stati e nomi delle entità seguono automaticamente la lingua configurata in Home Assistant.
 
 ### 🚀 Features
 
-- Rilascio pubblico iniziale dell'**integrazione ETI/DOMO per Home Assistant**
-- Gateway di comunicazione con i sistemi ETI/Domo tramite l'**interfaccia web Home Sapiens**
-
-#### Piattaforme supportate
-- Attuazioni
-- Ingressi analogici
-- Controllo climatico
-- Contatori energia
-- Fan coil
-- Centrale antintrusione
-- Luci
-- Scenari
-
-## [1.1.0] - 2026-04-04
-
-### 🚀 Features
-
-#### Piattaforme supportate
-- TVCC
-- Aperture
-- Ingressi digitali
-
-## [1.1.1] - 2026-04-09
+- Home Sapiens Assistant supporta ora **l'interfaccia multilingua**: notifiche, stati e nomi delle entità vengono mostrati nella lingua configurata su Home Assistant, con ricaduta automatica in inglese se la traduzione non è disponibile. Lingue attualmente supportate: **italiano, inglese, tedesco, spagnolo, francese, russo**.
 
 ### 🐛 Bug Fixes
 
-## [1.2.0] - 2026-04-12
+- Risolto un bug per cui, dopo un'interruzione di corrente a ETI/Domo (con Home Assistant rimasto attivo su UPS), alcune entità potevano mostrare uno stato non allineato a quello reale finché non veniva effettuata un'azione manuale. Ora, al ritorno online del gateway, gli stati vengono automaticamente risincronizzati. Inoltre luci e attivazioni vengono reimpostate al valore precedente al black out.
+
+- Corretta la deprecazione del device registry in vista di Home Assistant 2027.8.0: sostituito via_device con via_device_id in number.py, sensor.py, switch.py, text.py, binary_sensor.py e climate.py; sostituito async_get_device con async_get_device_by_identifier in sensor.py, number.py, switch.py, text.py.
+
+### ⚠️ Breaking changes
+
+- Nomi entità, opzioni delle select e preset ora seguono la lingua di HA, con fallback in inglese. Le automazioni che usano le vecchie stringhe italiane vanno aggiornate se HA non è in italiano.
+- Aggiornamento da versioni vecchie: chi arriva da una versione precedente alla 1.8.0 deve prima installare la 1.8.0.
+
+## [1.8.0] - 2026-08-20
 
 ### 🚀 Features
 
-- Aree di sicurezza
-- Ingressi di sicurezza
-- Uscite di sicurezza
+#### Climate - Copia/incolla profili termici, Profilo Jolly, modalità impianto spento
 
-## [1.3.0] - 2026-04-12
+- Aggiunto select "Copia profilo termico su" per ogni termostato: permette di copiare il profilo del giorno correntemente selezionato su un altro giorno specifico o su tutta la settimana.
+- Gestione del profilo Jolly esposto come preset mode sulla climate card
+- Quando l'impianto è spento, la card climate non mostra pulsanti inutilizzabili.
+
+#### Nuova piattaforma Controllo Carichi
+
+- Gestione completa in lettura/scrittura dei carichi controllati, esposte entità: abilitazione carico, profilo energetico settimanale, fondo scala, isteresi, sensore potenza.
+
+![loads](images/loads1.png)
+![loads](images/loads2.png)
+
+## [1.7.0] - 2026-08-02
+
+### 🎉 Novità distribuzione
+
+- L'integrazione è stata inserita nel catalogo ufficiale di HACS.<br>
+D'ora in poi è installabile con una semplice ricerca, senza configurazioni aggiuntive.
 
 ### 🚀 Features
 
-- Notifiche di stato Offline/Online per il server ETI/DOMO
+![alarm](images/alarm.png)
 
-## [1.3.1] - 2026-06-21
+- Allarme, tacitazione sirena: Nuovo comando per tacitare la sirena dell'allarme direttamente da Home Assistant, digitando il proprio codice su un'apposita entità testuale.
+
+- Allarme, cancellazione memoria eventi: Nuovo comando per azzerare la memoria degli eventi di allarme registrati dalla centrale, direttamente da Home Assistant, digitando il proprio codice su un'apposita entità testuale.
 
 ### 🐛 Bug Fixes
 
-- Corretta la modalità estiva del termostato
+- SecurityEventsLogger ora utilizza un percorso di log portabile tramite hass.config.path() invece di un percorso /config fisso, e le operazioni di I/O su file (creazione directory, scrittura log) vengono eseguite in un executor per non bloccare il event loop.
 
-## [1.4.0] - 2026-07-11
-
-### 🚀 Features
-
-#### Esposizione profili termici della modalità automatico
-
-- **Esposizione del profilo termico** per le entità climate
-- **Decodifica leggibile del profilo**: nuovo attributo `thermal_profile_schedule` che condensa i 96 slot da un quarto d'ora in intervalli di tempo compressi (es. `00:00-09:00: t3 | 30.0°C`), una riga per intervallo, pronto per una consultazione rapida e per le automazioni.
-- **Set-point attivo corrente**: nuovo attributo `scheduled_setpoint`, calcolato in tempo reale dal profilo termico in base all'orario corrente — utile per sapere "a che temperatura dovrebbe essere adesso" senza dover consultare lo scheduler.
-- **Attributi di stato più leggibili**: `mode` e `status` ora restituiscono etichette testuali invece dei codici numerici grezzi.
-- **Aggiornamento automatico del profilo al riavvio**: i termostati già in modalità AUTO ora richiedono attivamente il profilo termico completo e lo espongono immediatamente.
-
-#### Comportamento della card Climate
-
-- **La modalità AUTO ora mostra il set-point programmato** sulla card nativa (numero + slider), invece di mostrare solo il testo "Automatico" — coerente con il comportamento standard delle altre integrazioni climate di Home Assistant.
-- **La modalità OFF (solo in inverno) mostra il valore antigelo** (`antifreeze`) sulla card, invece di bloccare qualsiasi interazione. In estate rimane "Off" senza slider, poiché il concetto di antigelo non si applica al raffrescamento.
-- **Interazione assistita**: se l'utente muove lo slider mentre il termostato è in modalità AUTO o OFF (OFF solo in inverno), il termostato passa automaticamente in modalità **manuale** e applica immediatamente la temperatura richiesta, con una singola chiamata al gateway (mode + set_point in un unico comando).
-- Nuovo attributo `antifreeze` (°C) esposto sull'entità.
-
-### 🐛 Bug Fixes
-
-- **Merge pull request #4 da brokkolo/patch-1**: Corretti i falsi cali a 0°C nella cronologia: le entità climate impostavano di default temp_dec/set_point a 0/200 invece di None
-
-## [1.5.0] - 2026-07-17
-
-### 🚀 Features
-
-#### Centrale Antintrusione
-
-Gestione dell'inserimento quando una o più aree dello scenario richiesto non sono pronte (ingressi aperti), per evitare che l'allarme scatti immediatamente.
-
-##### Comportamento Implementato
-
-Quando l'utente richiede l'inserimento (arm_home / arm_night / arm_away) e una o più aree coinvolte nello scenario non sono pronte:
-
-1. Il comando **non** viene inviato immediatamente alla centrale.
-2. Inizia un periodo di attesa di **30 secondi**, durante il quale l'entità mostra lo stato ARMING.
-3. Viene inviata una notifica push a tutti i dispositivi mobili insieme a una notifica persistente in Home Assistant: *"⚠️ Inserimento in attesa"*.
-4. Se le aree diventano pronte prima dello scadere dei 30s → l'inserimento procede immediatamente e la notifica viene rimossa.
-5. Se i 30s scadono e le aree non sono ancora pronte → l'inserimento **viene comunque eseguito**, come richiesto dall'utente che era stato avvisato.
-6. Se l'utente invia il disinserimento durante l'attesa → la richiesta di inserimento viene annullata, nessun comando viene mai inviato alla centrale. La notifica persistente viene rimossa; la notifica push rimane sul telefono finché non viene cancellata manualmente dall'utente (scelta esplicita, nessun richiamo automatico).
-
-##### Notifiche Push per i Cambi di Stato della Centrale
-
-1. Aggiunto sistema di notifiche push che informa l'utente di ogni cambio di stato della centrale.
-
-#### Gestione timers
-
-![Scheduler](images/scheduler.png)
-
-1. Gestione timer (piattaforma Scheduler)
-- Eesposizione dei timer/programmazioni delle attivazioni (relè) come attributi entità #2
-
-### 🐛 Bug Fixes
-
-- [Bug] stato di alarm_control_panel bloccato su "unknown" dopo il riavvio — stato della centrale mai interrogato durante il discovery
- #3
- 
 ## [1.6.0] - 2026-07-26
 
 ### 🚀 Features
@@ -189,60 +139,112 @@ I seguenti parametri sono ora esposti sia in lettura che in scrittura:
 - Corretto un problema per cui, su alcuni impianti l'app poteva mostrare il pulsante sbagliato al posto di "resto in casa" (es. "notte"). Ora il sistema riconosce ogni scenario dal suo nome reale sulla centrale, non da un ordine fisso presunto.
 - Aggiunto il riconoscimento automatico di eventuale scenario "custom" configurato sulla centrale, che prima non veniva gestito.
 
-## [1.7.0] - 2026-08-02
-
-### 🎉 Novità distribuzione
-
-- L'integrazione è stata inserita nel catalogo ufficiale di HACS.<br>
-D'ora in poi è installabile con una semplice ricerca, senza configurazioni aggiuntive.
+## [1.5.0] - 2026-07-17
 
 ### 🚀 Features
 
-![alarm](images/alarm.png)
+#### Centrale Antintrusione
 
-- Allarme, tacitazione sirena: Nuovo comando per tacitare la sirena dell'allarme direttamente da Home Assistant, digitando il proprio codice su un'apposita entità testuale.
+Gestione dell'inserimento quando una o più aree dello scenario richiesto non sono pronte (ingressi aperti), per evitare che l'allarme scatti immediatamente.
 
-- Allarme, cancellazione memoria eventi: Nuovo comando per azzerare la memoria degli eventi di allarme registrati dalla centrale, direttamente da Home Assistant, digitando il proprio codice su un'apposita entità testuale.
+##### Comportamento Implementato
+
+Quando l'utente richiede l'inserimento (arm_home / arm_night / arm_away) e una o più aree coinvolte nello scenario non sono pronte:
+
+1. Il comando **non** viene inviato immediatamente alla centrale.
+2. Inizia un periodo di attesa di **30 secondi**, durante il quale l'entità mostra lo stato ARMING.
+3. Viene inviata una notifica push a tutti i dispositivi mobili insieme a una notifica persistente in Home Assistant: *"⚠️ Inserimento in attesa"*.
+4. Se le aree diventano pronte prima dello scadere dei 30s → l'inserimento procede immediatamente e la notifica viene rimossa.
+5. Se i 30s scadono e le aree non sono ancora pronte → l'inserimento **viene comunque eseguito**, come richiesto dall'utente che era stato avvisato.
+6. Se l'utente invia il disinserimento durante l'attesa → la richiesta di inserimento viene annullata, nessun comando viene mai inviato alla centrale. La notifica persistente viene rimossa; la notifica push rimane sul telefono finché non viene cancellata manualmente dall'utente (scelta esplicita, nessun richiamo automatico).
+
+##### Notifiche Push per i Cambi di Stato della Centrale
+
+1. Aggiunto sistema di notifiche push che informa l'utente di ogni cambio di stato della centrale.
+
+#### Gestione timers
+
+![Scheduler](images/scheduler.png)
+
+1. Gestione timer (piattaforma Scheduler)
+- Eesposizione dei timer/programmazioni delle attivazioni (relè) come attributi entità #2
 
 ### 🐛 Bug Fixes
 
-- SecurityEventsLogger ora utilizza un percorso di log portabile tramite hass.config.path() invece di un percorso /config fisso, e le operazioni di I/O su file (creazione directory, scrittura log) vengono eseguite in un executor per non bloccare il event loop.
-
-## [1.8.0] - 2026-08-20
-
-### 🚀 Features
-
-#### Climate - Copia/incolla profili termici, Profilo Jolly, modalità impianto spento
-
-- Aggiunto select "Copia profilo termico su" per ogni termostato: permette di copiare il profilo del giorno correntemente selezionato su un altro giorno specifico o su tutta la settimana.
-- Gestione del profilo Jolly esposto come preset mode sulla climate card
-- Quando l'impianto è spento, la card climate non mostra pulsanti inutilizzabili.
-
-#### Nuova piattaforma Controllo Carichi
-
-- Gestione completa in lettura/scrittura dei carichi controllati, esposte entità: abilitazione carico, profilo energetico settimanale, fondo scala, isteresi, sensore potenza.
-
-![loads](images/loads1.png)
-![loads](images/loads2.png)
-
-## [2.0.0] - 2026-09-25
-
-> # 🌍 **HOME SAPIENS ASSISTANT È ORA MULTILINGUA!**
->
-> L'integrazione ora parla **italiano, inglese, tedesco, spagnolo, francese e russo**.
-> Notifiche, stati e nomi delle entità seguono automaticamente la lingua configurata in Home Assistant.
+- [Bug] stato di alarm_control_panel bloccato su "unknown" dopo il riavvio — stato della centrale mai interrogato durante il discovery
+ #3
+ 
+## [1.4.0] - 2026-07-11
 
 ### 🚀 Features
 
-- Home Sapiens Assistant supporta ora **l'interfaccia multilingua**: notifiche, stati e nomi delle entità vengono mostrati nella lingua configurata su Home Assistant, con ricaduta automatica in inglese se la traduzione non è disponibile. Lingue attualmente supportate: **italiano, inglese, tedesco, spagnolo, francese, russo**.
+#### Esposizione profili termici della modalità automatico
+
+- **Esposizione del profilo termico** per le entità climate
+- **Decodifica leggibile del profilo**: nuovo attributo `thermal_profile_schedule` che condensa i 96 slot da un quarto d'ora in intervalli di tempo compressi (es. `00:00-09:00: t3 | 30.0°C`), una riga per intervallo, pronto per una consultazione rapida e per le automazioni.
+- **Set-point attivo corrente**: nuovo attributo `scheduled_setpoint`, calcolato in tempo reale dal profilo termico in base all'orario corrente — utile per sapere "a che temperatura dovrebbe essere adesso" senza dover consultare lo scheduler.
+- **Attributi di stato più leggibili**: `mode` e `status` ora restituiscono etichette testuali invece dei codici numerici grezzi.
+- **Aggiornamento automatico del profilo al riavvio**: i termostati già in modalità AUTO ora richiedono attivamente il profilo termico completo e lo espongono immediatamente.
+
+#### Comportamento della card Climate
+
+- **La modalità AUTO ora mostra il set-point programmato** sulla card nativa (numero + slider), invece di mostrare solo il testo "Automatico" — coerente con il comportamento standard delle altre integrazioni climate di Home Assistant.
+- **La modalità OFF (solo in inverno) mostra il valore antigelo** (`antifreeze`) sulla card, invece di bloccare qualsiasi interazione. In estate rimane "Off" senza slider, poiché il concetto di antigelo non si applica al raffrescamento.
+- **Interazione assistita**: se l'utente muove lo slider mentre il termostato è in modalità AUTO o OFF (OFF solo in inverno), il termostato passa automaticamente in modalità **manuale** e applica immediatamente la temperatura richiesta, con una singola chiamata al gateway (mode + set_point in un unico comando).
+- Nuovo attributo `antifreeze` (°C) esposto sull'entità.
 
 ### 🐛 Bug Fixes
 
-- Risolto un bug per cui, dopo un'interruzione di corrente a ETI/Domo (con Home Assistant rimasto attivo su UPS), alcune entità potevano mostrare uno stato non allineato a quello reale finché non veniva effettuata un'azione manuale. Ora, al ritorno online del gateway, gli stati vengono automaticamente risincronizzati. Inoltre luci e attivazioni vengono reimpostate al valore precedente al black out.
+- **Merge pull request #4 da brokkolo/patch-1**: Corretti i falsi cali a 0°C nella cronologia: le entità climate impostavano di default temp_dec/set_point a 0/200 invece di None
 
-- Corretta la deprecazione del device registry in vista di Home Assistant 2027.8.0: sostituito via_device con via_device_id in number.py, sensor.py, switch.py, text.py, binary_sensor.py e climate.py; sostituito async_get_device con async_get_device_by_identifier in sensor.py, number.py, switch.py, text.py.
+## [1.3.1] - 2026-06-21
 
-### ⚠️ Breaking changes
+### 🐛 Bug Fixes
 
-- Nomi entità, opzioni delle select e preset ora seguono la lingua di HA, con fallback in inglese. Le automazioni che usano le vecchie stringhe italiane vanno aggiornate se HA non è in italiano.
-- Aggiornamento da versioni vecchie: chi arriva da una versione precedente alla 1.8.0 deve prima installare la 1.8.0.
+- Corretta la modalità estiva del termostato
+
+## [1.3.0] - 2026-04-12
+
+### 🚀 Features
+
+- Notifiche di stato Offline/Online per il server ETI/DOMO
+
+## [1.2.0] - 2026-04-12
+
+### 🚀 Features
+
+- Aree di sicurezza
+- Ingressi di sicurezza
+- Uscite di sicurezza
+
+## [1.1.1] - 2026-04-09
+
+### 🐛 Bug Fixes
+
+- Fix minori
+
+## [1.1.0] - 2026-04-04
+
+### 🚀 Features
+
+#### Piattaforme supportate
+- TVCC
+- Aperture
+- Ingressi digitali
+
+## [1.0.0] - 2026-03-12
+
+### 🚀 Features
+
+- Rilascio pubblico iniziale dell'**integrazione ETI/DOMO per Home Assistant**
+- Gateway di comunicazione con i sistemi ETI/Domo tramite l'**interfaccia web Home Sapiens**
+
+#### Piattaforme supportate
+- Attuazioni
+- Ingressi analogici
+- Controllo climatico
+- Contatori energia
+- Fan coil
+- Centrale antintrusione
+- Luci
+- Scenari
