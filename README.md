@@ -66,7 +66,7 @@ Currently supported:
    - Full replication of all functions exposed for reading and writing
    
 - Openings
-   - Shutters / Awnings
+   - Shutters / Covers
    
 - Scenarios
    - Activation
