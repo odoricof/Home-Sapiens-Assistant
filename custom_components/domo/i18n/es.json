@@ -1,0 +1,195 @@
+{
+  "sicu_notifications": {
+    "state_labels": {
+      "armed_away": "ACTIVADO FUERA DE CASA",
+      "armed_night": "ACTIVADO NOCHE",
+      "armed_home": "ACTIVADO EN CASA",
+      "armed_custom_bypass": "ACTIVADO PARCIALMENTE",
+      "disarmed": "DESACTIVADO"
+    },
+    "unknown_area": "Desconocida",
+    "alarm_triggered": {
+      "title": "🚨 ¡ALARMA EN CURSO!",
+      "message_single": "Sensor activado: {sensor} (área {area}) - {time}",
+      "message_multiple": "Sensores activados: {sensors} - {time}"
+    },
+    "state_change": {
+      "title": "🛡️ CENTRAL DE ALARMA",
+      "message": "Estado: {state} - {time}"
+    },
+    "pending_arm": {
+      "title": "⚠️ ARMADO PENDIENTE",
+      "message": "Atención: armado en curso con entradas abiertas (área: {areas})"
+    }
+  },
+  "sicu_entities": {
+    "area_status": {
+      "not_ready": "No lista",
+      "arming_open_inputs": "Armado con entradas abiertas",
+      "input_open_pending_disarm": "Entrada abierta, pendiente de desarmar",
+      "intrusion_open_inputs": "Intrusión detectada, entradas abiertas",
+      "ready": "Lista",
+      "arming": "Armando",
+      "armed": "Armada",
+      "intrusion_alarm": "Alarma de intrusión en curso",
+      "intrusion_detected": "Intrusión detectada",
+      "alarm_memory": "Memoria de alarma",
+      "open_and_bypassed": "Entradas abiertas y anuladas",
+      "ready_bypassed": "Lista con entradas anuladas",
+      "unknown": "Desconocido"
+    },
+    "input_status": {
+      "closed": "Cerrado",
+      "bypassed": "Anulado",
+      "alarm_memory": "Memoria de alarma",
+      "unknown": "Desconocido",
+      "open": "Abierto",
+      "alarm": "Alarma",
+      "low_battery": "Batería baja"
+    },
+    "unknown_with_code": "Desconocido ({code})",
+    "action_names": {
+      "silence": "CODE - Silenciar sirenas",
+      "reset_event_memory": "CODE - Restablecer memoria de eventos"
+    },
+    "action_feedback": {
+      "no_action": "Ninguna acción realizada",
+      "done": "hecho",
+      "error": "Error"
+    }
+  },
+  "common_entities": {
+    "weekday_labels": {
+      "mon": "Lunes",
+      "tue": "Martes",
+      "wed": "Miércoles",
+      "thu": "Jueves",
+      "fri": "Viernes",
+      "sat": "Sábado",
+      "sun": "Domingo"
+    }
+  },
+  "scheduler_entities": {
+    "entity_names": {
+      "enabled": "Habilitado"
+    },
+    "slot_disabled": "Desactivado"
+  },
+  "thermoregulation_entities": {
+    "entity_names": {
+      "profile": "Perfil térmico diario (HH:MM-HH:MM=tN,...)",
+      "plant_mode": "Estación",
+      "algo_mode": "Modo de algoritmo",
+      "profile_day": "Día del perfil térmico",
+      "profile_copy": "Copiar perfil térmico a",
+      "restore_file": "Archivo de copia de seguridad de perfiles térmicos",
+      "antifreeze": "Anticongelante",
+      "differential": "Diferencial térmico",
+      "thermo_backup_button": "Copia de seguridad de perfiles térmicos",
+      "thermo_restore_button": "Restaurar perfiles térmicos"
+    },
+    "restore_file": {
+      "placeholder": "-- seleccionar un archivo --",
+      "status": {
+        "in_progress": "Restauración en curso...",
+        "verify_failed": "Restauración: verificación fallida",
+        "done": "Restauración completada"
+      }
+    },
+    "algo_mode_options": {
+      "pi1": "Proporcional-Integral 1",
+      "pi2": "Proporcional-Integral 2",
+      "pi3": "Proporcional-Integral 3",
+      "pi4": "Proporcional-Integral 4",
+      "differential": "Diferencial"
+    },
+    "weekday_options": {
+      "monday": "Lunes",
+      "tuesday": "Martes",
+      "wednesday": "Miércoles",
+      "thursday": "Jueves",
+      "friday": "Viernes",
+      "saturday": "Sábado",
+      "sunday": "Domingo"
+    },
+    "season_options": {
+      "summer": "Verano",
+      "winter": "Invierno",
+      "plant_off": "Instalación apagada"
+    },
+    "copy_profile": {
+      "placeholder": "Seleccionar",
+      "all_week": "Toda la semana"
+    },
+    "errors": {
+      "invalid_option": "Opción no válida: {option}",
+      "no_thermostat_available": "Ningún termostato disponible",
+      "no_backup_available": "Ninguna copia de seguridad disponible"
+    },
+    "action_feedback": {
+      "pending": "Espere...",
+      "send_error": "Error al enviar el comando: {err}",
+      "command_ignored": "Comando ignorado: set_point aún no conocido para este termostato.",
+      "algo_mode_send_error": "Error al enviar thermo_zone_config_req: {err}",
+      "command_ignored_profile_incomplete": "Comando ignorado: perfil térmico aún no completo para este termostato.",
+      "backup_error": "Error al realizar la copia de seguridad: {err}",
+      "no_restore_file_selected": "Ningún archivo de restauración seleccionado",
+      "restore_error": "Error al restaurar ({filename}): {err}"
+    }
+  },
+  "loadsctrl_entities": {
+    "entity_names": {
+      "profile": "Perfil energético diario (H-H=W, H-H=W)",
+      "profile_day": "Día del perfil energético",
+      "max_power": "Fondo de escala",
+      "hysteresis": "Histéresis"
+    },
+    "weekday_options": {
+      "monday": "Lunes",
+      "tuesday": "Martes",
+      "wednesday": "Miércoles",
+      "thursday": "Jueves",
+      "friday": "Viernes",
+      "saturday": "Sábado",
+      "sunday": "Domingo"
+    },
+    "action_feedback": {
+      "pending": "Espere...",
+      "send_error": "Error al enviar el comando: {err}"
+    }
+  },
+  "irrigation_entities": {
+    "entity_names": {
+      "enabled": "Habilitado",
+      "manual_mode": "Modo manual",
+      "seasonal_percentage": "% Estacional",
+      "active_time": "Tiempo máx. de riego",
+      "duty_cycle": "Ciclo de trabajo",
+      "start_time": "HORA DE INICIO",
+      "end_time": "HORA DE FIN"
+    },
+    "action_feedback": {
+      "send_error": "Error al enviar el comando: {err}",
+      "end_time_readonly": "La hora de fin se calcula automáticamente mediante la pasarela: no editable."
+    }
+  },
+  "scenarios_entities": {
+    "entity_names": {
+      "name": "Nombre del escenario",
+      "start_registration_button": "Iniciar registro de escenario",
+      "stop_registration_button": "Finalizar registro de escenario",
+      "delete_button": "Eliminar escenario",
+      "rename_button": "Renombrar escenario"
+    },
+    "status": {
+      "recording": "Grabación en curso: {name}",
+      "new_name": "Nuevo nombre: "
+    },
+    "action_feedback": {
+      "start_registration_error": "Error al iniciar el registro del escenario: {err}",
+      "stop_registration_error": "Error al finalizar el registro del escenario: {err}",
+      "delete_error": "Error al eliminar el escenario: {err}",
+      "rename_error": "Error al iniciar el cambio de nombre del escenario: {err}"
+    }
+  }
+}

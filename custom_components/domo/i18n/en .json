@@ -1,0 +1,195 @@
+{
+  "sicu_notifications": {
+    "state_labels": {
+      "armed_away": "ARMED AWAY",
+      "armed_night": "ARMED NIGHT",
+      "armed_home": "ARMED HOME",
+      "armed_custom_bypass": "PARTIALLY ARMED",
+      "disarmed": "DISARMED"
+    },
+    "unknown_area": "Unknown",
+    "alarm_triggered": {
+      "title": "🚨 ALARM IN PROGRESS!",
+      "message_single": "Sensor triggered: {sensor} (area {area}) - {time}",
+      "message_multiple": "Sensors triggered: {sensors} - {time}"
+    },
+    "state_change": {
+      "title": "🛡️ SECURITY PANEL",
+      "message": "State: {state} - {time}"
+    },
+    "pending_arm": {
+      "title": "⚠️ ARMING PENDING",
+      "message": "Warning: arming in progress with open inputs (area: {areas})"
+    }
+  },
+  "sicu_entities": {
+    "area_status": {
+      "not_ready": "Not ready",
+      "arming_open_inputs": "Arming with open inputs",
+      "input_open_pending_disarm": "Input open, pending disarm",
+      "intrusion_open_inputs": "Intrusion detected, inputs open",
+      "ready": "Ready",
+      "arming": "Arming",
+      "armed": "Armed",
+      "intrusion_alarm": "Intrusion alarm in progress",
+      "intrusion_detected": "Intrusion detected",
+      "alarm_memory": "Alarm memory",
+      "open_and_bypassed": "Open and bypassed inputs",
+      "ready_bypassed": "Ready with bypassed inputs",
+      "unknown": "Unknown"
+    },
+    "input_status": {
+      "closed": "Closed",
+      "bypassed": "Bypassed",
+      "alarm_memory": "Alarm memory",
+      "unknown": "Unknown",
+      "open": "Open",
+      "alarm": "Alarm",
+      "low_battery": "Low battery"
+    },
+    "unknown_with_code": "Unknown ({code})",
+    "action_names": {
+      "silence": "CODE - Silence sirens",
+      "reset_event_memory": "CODE - Reset event memory"
+    },
+    "action_feedback": {
+      "no_action": "No action performed",
+      "done": "done",
+      "error": "Error"
+    }
+  },
+  "common_entities": {
+    "weekday_labels": {
+      "mon": "Monday",
+      "tue": "Tuesday",
+      "wed": "Wednesday",
+      "thu": "Thursday",
+      "fri": "Friday",
+      "sat": "Saturday",
+      "sun": "Sunday"
+    }
+  },
+  "scheduler_entities": {
+    "entity_names": {
+      "enabled": "Enabled"
+    },
+    "slot_disabled": "Disabled"
+  },
+  "thermoregulation_entities": {
+    "entity_names": {
+      "profile": "Daily thermal profile (HH:MM-HH:MM=tN,...)",
+      "plant_mode": "Season",
+      "algo_mode": "Algorithm mode",
+      "profile_day": "Thermal profile day",
+      "profile_copy": "Copy thermal profile to",
+      "restore_file": "Thermal profile backup file",
+      "antifreeze": "Antifreeze",
+      "differential": "Thermal differential",
+      "thermo_backup_button": "Backup thermal profiles",
+      "thermo_restore_button": "Restore thermal profiles"
+    },
+    "restore_file": {
+      "placeholder": "-- select a file --",
+      "status": {
+        "in_progress": "Restore in progress...",
+        "verify_failed": "Restore: verification failed",
+        "done": "Restore completed"
+      }
+    },
+    "algo_mode_options": {
+      "pi1": "Proportional-Integral 1",
+      "pi2": "Proportional-Integral 2",
+      "pi3": "Proportional-Integral 3",
+      "pi4": "Proportional-Integral 4",
+      "differential": "Differential"
+    },
+    "weekday_options": {
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday",
+      "sunday": "Sunday"
+    },
+    "season_options": {
+      "summer": "Summer",
+      "winter": "Winter",
+      "plant_off": "System Off"
+    },
+    "copy_profile": {
+      "placeholder": "Select",
+      "all_week": "Whole week"
+    },
+    "errors": {
+      "invalid_option": "Invalid option: {option}",
+      "no_thermostat_available": "No thermostat available",
+      "no_backup_available": "No backup available"
+    },
+    "action_feedback": {
+      "pending": "Please wait...",
+      "send_error": "Error sending command: {err}",
+      "command_ignored": "Command ignored: set_point not yet known for this thermostat.",
+      "algo_mode_send_error": "Error sending thermo_zone_config_req: {err}",
+      "command_ignored_profile_incomplete": "Command ignored: thermal profile not yet complete for this thermostat.",
+      "backup_error": "Backup failed: {err}",
+      "no_restore_file_selected": "No backup file selected",
+      "restore_error": "Restore failed ({filename}): {err}"
+    }
+  },
+  "loadsctrl_entities": {
+    "entity_names": {
+      "profile": "Daily energy profile (H-H=W, H-H=W)",
+      "profile_day": "Energy profile day",
+      "max_power": "Full scale",
+      "hysteresis": "Hysteresis"
+    },
+    "weekday_options": {
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday",
+      "sunday": "Sunday"
+    },
+    "action_feedback": {
+      "pending": "Please wait...",
+      "send_error": "Error sending command: {err}"
+    }
+  },
+  "irrigation_entities": {
+    "entity_names": {
+      "enabled": "Enabled",
+      "manual_mode": "Manual mode",
+      "seasonal_percentage": "Seasonal %",
+      "active_time": "Max irrigation time",
+      "duty_cycle": "Duty cycle",
+      "start_time": "START TIME",
+      "end_time": "END TIME"
+    },
+    "action_feedback": {
+      "send_error": "Error sending command: {err}",
+      "end_time_readonly": "End time is automatically calculated by the gateway: not editable."
+    }
+  },
+  "scenarios_entities": {
+    "entity_names": {
+      "name": "Scenario name",
+      "start_registration_button": "Start scenario registration",
+      "stop_registration_button": "Finish scenario registration",
+      "delete_button": "Delete scenario",
+      "rename_button": "Rename scenario"
+    },
+    "status": {
+      "recording": "Registration in progress: {name}",
+      "new_name": "New name: "
+    },
+    "action_feedback": {
+      "start_registration_error": "Error starting scenario registration: {err}",
+      "stop_registration_error": "Error stopping scenario registration: {err}",
+      "delete_error": "Error deleting scenario: {err}",
+      "rename_error": "Error starting scenario rename: {err}"
+    }
+  }
+}
