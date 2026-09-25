@@ -1,7 +1,9 @@
 [![Current release](https://img.shields.io/github/release/odoricof/Home-Sapiens-Assistant.svg?style=plastic&label=Current%20release)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 [![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=plastic)](https://github.com/odoricof/Home-Sapiens-Assistant)  
+[![Validate with hassfest](https://github.com/odoricof/Home-Sapiens-Assistant/actions/workflows/hassfest.yaml/badge.svg)](https://github.com/odoricof/Home-Sapiens-Assistant/actions/workflows/hassfest.yaml)
+[![Validate](https://github.com/odoricof/Home-Sapiens-Assistant/actions/workflows/validate.yml/badge.svg)](https://github.com/odoricof/Home-Sapiens-Assistant/actions/workflows/validate.yml)  
 [![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
-[![Buy me a beer 🍺🍺🍺](https://img.shields.io/badge/PayPal-Buy%20me%20a%20beer%20🍺🍺🍺-blue?style=plastic&logo=paypal)](https://paypal.me/odoricof)
+[![Buy me a beer 🍺🍺🍺](https://img.shields.io/badge/PayPal-Buy%20me%20a%20beer%20🍺🍺🍺-blue?style=plastic&logo=paypal)](https://paypal.me/odoricof)  
 
 
 <img src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo@2x.png" width="96" alt="">
