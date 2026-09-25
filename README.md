@@ -13,7 +13,7 @@
 **Multilingual Custom integration** for **Home Assistant** to interface with **Bpt Home Automation / CAME Domotic 3.0 (Systems based of ETI/DOMO server)** through the Home Sapiens web interface.
 
 ---
-### 🌍 Supported languages
+### 🌍 Translations
 
 | 🇮🇹 Italian | 🇬🇧 English | 🇪🇸 Spanish | 🇫🇷 French | 🇩🇪 German | 🇷🇺 Russian |
 |:---:|:---:|:---:|:---:|:---:|:---:|
