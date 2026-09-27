@@ -216,12 +216,18 @@ class DomoThermostatProfileNumber(NumberEntity):
             raise HomeAssistantError(str(err)) from err
         except Exception as err:
             raise HomeAssistantError(
-                translated["action_feedback.algo_mode_send_error"].format(err=err)
+                translated.get(
+                    "action_feedback.algo_mode_send_error",
+                    "Error sending thermo_zone_config_req: {err}",
+                ).format(err=err)
             ) from err
 
         if not ok:
             raise HomeAssistantError(
-                translated["action_feedback.command_ignored_profile_incomplete"]
+                translated.get(
+                    "action_feedback.command_ignored_profile_incomplete",
+                    "Command ignored: thermal profile not yet complete for this thermostat.",
+                )
             )
 
     def _enforce_profile_order(self, value: float) -> float:
@@ -290,12 +296,18 @@ class DomoThermostatDiffNumber(NumberEntity):
             ok = await self._thermostat.async_set_diff_t_dec(value)
         except Exception as err:
             raise HomeAssistantError(
-                translated["action_feedback.algo_mode_send_error"].format(err=err)
+                translated.get(
+                    "action_feedback.algo_mode_send_error",
+                    "Error sending thermo_zone_config_req: {err}",
+                ).format(err=err)
             ) from err
 
         if not ok:
             raise HomeAssistantError(
-                translated["action_feedback.command_ignored_profile_incomplete"]
+                translated.get(
+                    "action_feedback.command_ignored_profile_incomplete",
+                    "Command ignored: thermal profile not yet complete for this thermostat.",
+                )
             )
 
     async def async_added_to_hass(self):
@@ -354,7 +366,7 @@ class DomoIrrigationPercNumber(NumberEntity):
         except Exception as err:
             translated = await async_get_translated_strings(self.hass, "irrigation_entities")
             raise HomeAssistantError(
-                translated["action_feedback.send_error"].format(err=err)
+                translated.get("action_feedback.send_error", "Error sending command: {err}").format(err=err)
             ) from err
 
     async def async_added_to_hass(self):
@@ -444,7 +456,7 @@ class DomoIrrigationActiveNumber(NumberEntity):
         except Exception as err:
             translated = await async_get_translated_strings(self.hass, "irrigation_entities")
             raise HomeAssistantError(
-                translated["action_feedback.send_error"].format(err=err)
+                translated.get("action_feedback.send_error", "Error sending command: {err}").format(err=err)
             ) from err
 
     async def async_added_to_hass(self):
@@ -491,7 +503,7 @@ class DomoIrrigationDutyNumber(NumberEntity):
         except Exception as err:
             translated = await async_get_translated_strings(self.hass, "irrigation_entities")
             raise HomeAssistantError(
-                translated["action_feedback.send_error"].format(err=err)
+                translated.get("action_feedback.send_error", "Error sending command: {err}").format(err=err)
             ) from err
 
     async def async_added_to_hass(self):
@@ -562,7 +574,7 @@ class DomoLoadCtrlMaxPowerNumber(NumberEntity):
         except Exception as err:
             translated = await async_get_translated_strings(self.hass, "loadsctrl_entities")
             raise HomeAssistantError(
-                translated["action_feedback.send_error"].format(err=err)
+                translated.get("action_feedback.send_error", "Error sending command: {err}").format(err=err)
             ) from err
 
     async def async_added_to_hass(self):
@@ -610,7 +622,7 @@ class DomoLoadCtrlHysteresisNumber(NumberEntity):
         except Exception as err:
             translated = await async_get_translated_strings(self.hass, "loadsctrl_entities")
             raise HomeAssistantError(
-                translated["action_feedback.send_error"].format(err=err)
+                translated.get("action_feedback.send_error", "Error sending command: {err}").format(err=err)
             ) from err
 
     async def async_added_to_hass(self):

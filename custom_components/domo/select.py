@@ -169,7 +169,7 @@ class DomoPlantModeSelect(SelectEntity):
         if not thermostats:
             return None
 
-        return self._i18n.get(f"season_options.{thermostats[0].season}")
+        return self._i18n.get(f"season_options.{thermostats[0].season}", thermostats[0].season)
 
     async def async_select_option(self, option: str) -> None:
         """Set the plant-wide season."""
@@ -179,12 +179,14 @@ class DomoPlantModeSelect(SelectEntity):
         season = reverse.get(option)
         if season is None:
             strings = await async_get_translated_strings(self.hass, "thermoregulation_entities")
-            raise HomeAssistantError(strings["errors.invalid_option"].format(option=option))
+            raise HomeAssistantError(
+                strings.get("errors.invalid_option", "Invalid option: {option}").format(option=option)
+            )
 
         thermostats = get_all_thermostats()
         if not thermostats:
             strings = await async_get_translated_strings(self.hass, "thermoregulation_entities")
-            raise HomeAssistantError(strings["errors.no_thermostat_available"])
+            raise HomeAssistantError(strings.get("errors.no_thermostat_available", "No thermostat available"))
 
         gateway = thermostats[0].gateway
         await gateway.tx_command(
@@ -250,12 +252,20 @@ class DomoThermostatAlgoModeSelect(SelectEntity):
         except Exception as err:
             strings = await async_get_translated_strings(self.hass, "thermoregulation_entities")
             raise HomeAssistantError(
-                strings["action_feedback.algo_mode_send_error"].format(err=err)
+                strings.get(
+                    "action_feedback.algo_mode_send_error",
+                    "Error sending thermo_zone_config_req: {err}",
+                ).format(err=err)
             ) from err
 
         if not ok:
             strings = await async_get_translated_strings(self.hass, "thermoregulation_entities")
-            raise HomeAssistantError(strings["action_feedback.command_ignored_profile_incomplete"])
+            raise HomeAssistantError(
+                strings.get(
+                    "action_feedback.command_ignored_profile_incomplete",
+                    "Command ignored: thermal profile not yet complete for this thermostat.",
+                )
+            )
 
     async def async_added_to_hass(self):
         self._i18n = await async_get_translated_strings(self.hass, "thermoregulation_entities")
@@ -397,7 +407,9 @@ class DomoThermostatProfileCopySelect(SelectEntity):
             targets = [reverse[option]]
         else:
             strings = await async_get_translated_strings(self.hass, "thermoregulation_entities")
-            raise HomeAssistantError(strings["errors.invalid_option"].format(option=option))
+            raise HomeAssistantError(
+                strings.get("errors.invalid_option", "Invalid option: {option}").format(option=option)
+            )
 
         for day in targets:
             await self._thermostat.async_write_raw_profile(PROFILE_DAY_TO_ID[day], profile_data)
@@ -449,7 +461,7 @@ class DomoThermoRestoreFileSelect(SelectEntity):
         no_backup = self._i18n.get("errors.no_backup_available", "Nessun backup disponibile")
         base = [placeholder] + files if files else [no_backup]
         status_key = get_restore_status()
-        status = self._i18n.get(f"restore_file.status.{status_key}") if status_key else None
+        status = self._i18n.get(f"restore_file.status.{status_key}", status_key) if status_key else None
         if status and status not in base:
             return [status] + base
         return base
@@ -458,7 +470,7 @@ class DomoThermoRestoreFileSelect(SelectEntity):
     def current_option(self) -> str | None:
         status_key = get_restore_status()
         if status_key:
-            return self._i18n.get(f"restore_file.status.{status_key}")
+            return self._i18n.get(f"restore_file.status.{status_key}", status_key)
         selected = get_selected_restore_file()
         options = self.options
         if selected in options:

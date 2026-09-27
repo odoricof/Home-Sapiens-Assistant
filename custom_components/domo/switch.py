@@ -57,6 +57,16 @@ from .platforms.scheduler import (
 
 _LOGGER = logging.getLogger(__name__)
 
+_WEEKDAY_LABELS = {
+    "mon": "Monday",
+    "tue": "Tuesday",
+    "wed": "Wednesday",
+    "thu": "Thursday",
+    "fri": "Friday",
+    "sat": "Saturday",
+    "sun": "Sunday",
+}
+
 
 # ============================================================
 # ===== SETUP ENTRY =====
@@ -262,17 +272,6 @@ class DomoSwitchEntity(SwitchEntity):
 # ============================================================
 # ===== TIMERS =====
 # ============================================================
-
-_WEEKDAY_LABELS = {
-    "mon": "Lunedi'",
-    "tue": "Martedi'",
-    "wed": "Mercoledi'",
-    "thu": "Giovedi'",
-    "fri": "Venerdi'",
-    "sat": "Sabato",
-    "sun": "Domenica",
-}
-
 
 def _timer_device_info(timer: DomoTimer, entry_id: str) -> DeviceInfo:
     """DeviceInfo for the 'timer' device, shared by all entities of the same timer."""

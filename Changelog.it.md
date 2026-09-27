@@ -7,7 +7,14 @@ Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
 ---
 
-## [2.0.0] - 2026-09-25
+## [2.0.1] - 2026-09-27
+
+### 🐛 Bug Fixes
+
+- Corrette le traduzioni mancanti sulle installazioni in inglese, causate da un file di lingua rinominato in modo errato. (#5)
+- Resa più robusta la lettura delle traduzioni su entità select, number e switch: un file di traduzione mancante o incompleto ora ricade sempre su un valore di default in inglese invece di mostrare "Unknown", `None` o generare un errore.
+
+# [2.0.0] - 2026-09-25
 
 > # 🌍 **HOME SAPIENS ASSISTANT È ORA MULTILINGUA!**
 >

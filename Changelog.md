@@ -7,6 +7,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.0.1] - 2026-09-27
+
+### 🐛 Bug Fixes
+
+- Fixed missing translations on English installations caused by an incorrectly named language file. (#5)
+- Hardened translation lookups across select, number and switch entities: a missing or incomplete translation file now always falls back to an English default instead of showing "Unknown", `None`, or raising an error.
+
 ## [2.0.0] - 2026-09-25
 
 > # 🌍 **HOME SAPIENS ASSISTANT IS NOW MULTILINGUAL!**
