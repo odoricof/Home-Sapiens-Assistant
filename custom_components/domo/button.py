@@ -93,7 +93,7 @@ class DomoThermoBackupButton(ButtonEntity):
 
     @property
     def name(self) -> str:
-        return self._i18n.get("entity_names.thermo_backup_button", "Backup profili termici")
+        return self._i18n.get("entity_names.thermo_backup_button", "Backup thermal profiles")
 
     async def async_press(self) -> None:
         try:
@@ -127,7 +127,7 @@ class DomoThermoRestoreButton(ButtonEntity):
 
     @property
     def name(self) -> str:
-        return self._i18n.get("entity_names.thermo_restore_button", "Ripristina profili termici")
+        return self._i18n.get("entity_names.thermo_restore_button", "Restore thermal profiles")
 
     async def async_press(self) -> None:
         i18n = self._i18n or await async_get_translated_strings(self.hass, "thermoregulation_entities")
@@ -163,7 +163,7 @@ class DomoScenarioStartRegistrationButton(ButtonEntity):
         self._attr_unique_id = "domo_scenario_start_registration_button"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_scenarios")},
-            name="Scenari",
+            name="Scenarios",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
@@ -174,7 +174,7 @@ class DomoScenarioStartRegistrationButton(ButtonEntity):
 
     @property
     def name(self) -> str:
-        return self._i18n.get("entity_names.start_registration_button", "Avvia registrazione scenario")
+        return self._i18n.get("entity_names.start_registration_button", "Start scenario registration")
 
     async def async_press(self) -> None:
         try:
@@ -201,7 +201,7 @@ class DomoScenarioStopRegistrationButton(ButtonEntity):
         self._attr_unique_id = "domo_scenario_stop_registration_button"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_scenarios")},
-            name="Scenari",
+            name="Scenarios",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
@@ -212,7 +212,7 @@ class DomoScenarioStopRegistrationButton(ButtonEntity):
 
     @property
     def name(self) -> str:
-        return self._i18n.get("entity_names.stop_registration_button", "Concludi registrazione scenario")
+        return self._i18n.get("entity_names.stop_registration_button", "Finish scenario registration")
 
     async def async_press(self) -> None:
         try:
@@ -239,7 +239,7 @@ class DomoScenarioDeleteButton(ButtonEntity):
         self._attr_unique_id = "domo_scenario_delete_button"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_scenarios")},
-            name="Scenari",
+            name="Scenarios",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
@@ -250,7 +250,7 @@ class DomoScenarioDeleteButton(ButtonEntity):
 
     @property
     def name(self) -> str:
-        return self._i18n.get("entity_names.delete_button", "Cancella scenario")
+        return self._i18n.get("entity_names.delete_button", "Delete scenario")
 
     async def async_press(self) -> None:
         try:
@@ -274,7 +274,7 @@ class DomoScenarioRenameButton(ButtonEntity):
         self._attr_unique_id = "domo_scenario_rename_button"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{entry_id}_scenarios")},
-            name="Scenari",
+            name="Scenarios",
             manufacturer="Home Sapiens Assistant",
             model="Eti/Domo",
         )
@@ -285,7 +285,7 @@ class DomoScenarioRenameButton(ButtonEntity):
 
     @property
     def name(self) -> str:
-        return self._i18n.get("entity_names.rename_button", "Rinomina scenario")
+        return self._i18n.get("entity_names.rename_button", "Rename scenario")
 
     async def async_press(self) -> None:
         try:

@@ -47,8 +47,8 @@ _LOGGER = logging.getLogger(__name__)
 
 _ALGO_MODE_KEYS = list(ALGO_MODE_TO_PARAMS.keys())
 _WEEKDAY_OPTIONS = [day for day in PROFILE_DAY_TO_ID if day != "jolly"]
-_COPY_PLACEHOLDER = "Selezionare"
-_COPY_ALL_WEEK = "Tutta la settimana"
+_COPY_PLACEHOLDER = "Select"
+_COPY_ALL_WEEK = "Whole week"
 _LOADCTRL_WEEKDAY_OPTIONS = list(LOADCTRL_DAY_TO_INDEX.keys())
 
 # "Jolly" is a fixed technical term (not a real weekday), left untranslated
@@ -394,7 +394,7 @@ class DomoThermostatProfileCopySelect(SelectEntity):
         if not profile_data:
             # Defensive branch, not reachable in practice (confirmed) - left untranslated.
             raise HomeAssistantError(
-                f"Nessun profilo disponibile da copiare per il giorno {source_day}."
+                f"No profile available to copy for day {source_day}."
             )
 
         reverse = {
@@ -456,9 +456,9 @@ class DomoThermoRestoreFileSelect(SelectEntity):
 
     @property
     def options(self) -> list[str]:
-        placeholder = self._i18n.get("restore_file.placeholder", "-- seleziona un file --")
+        placeholder = self._i18n.get("restore_file.placeholder", "-- select a file --")
         files = list_backup_files(self.hass)
-        no_backup = self._i18n.get("errors.no_backup_available", "Nessun backup disponibile")
+        no_backup = self._i18n.get("errors.no_backup_available", "No backup available")
         base = [placeholder] + files if files else [no_backup]
         status_key = get_restore_status()
         status = self._i18n.get(f"restore_file.status.{status_key}", status_key) if status_key else None
@@ -478,7 +478,7 @@ class DomoThermoRestoreFileSelect(SelectEntity):
         return options[0]
 
     async def async_select_option(self, option: str) -> None:
-        placeholder = self._i18n.get("restore_file.placeholder", "-- seleziona un file --")
+        placeholder = self._i18n.get("restore_file.placeholder", "-- select a file --")
         selected = RESTORE_PLACEHOLDER if option == placeholder else option
         set_selected_restore_file(selected)
         self.async_write_ha_state()
