@@ -13,7 +13,7 @@
 
 ## [2.1.0] - 2026-09-29
 
-### 🚀 Funzionalità
+### 🚀 Features
 
 #### Security - Esclusione ingressi
 
