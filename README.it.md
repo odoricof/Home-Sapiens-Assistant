@@ -21,7 +21,7 @@
 ---
 #### ⭐ Se questa integrazione ti è utile, lascia una stella al progetto e se vuoi offrimi una birra! Grazie!
 
-<a href="https://github.com/odoricof/Home-Sapiens-Assistant"><img src="https://img.shields.io/github/stars/odoricof/Home-Sapiens-Assistant?style=plastic&logo=github&label=GIVE%20A%20STAR&color=FFC107&labelColor=555555" height="28" alt="Give a star"></a> <a href="https://paypal.me/odoricof"><img src="https://img.shields.io/badge/PayPal-BUY%20ME%20A%20BEER🍺🍺🍺-0070BA?style=plastic&logo=paypal&labelColor=555555" height="28" alt="Buy me a beer"></a>
+[![Give a star](https://img.shields.io/github/stars/odoricof/Home-Sapiens-Assistant?style=for-the-badge&logo=github&label=Give%20a%20star&color=FFC107&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant) [![Buy me a beer](https://img.shields.io/badge/PayPal-Buy%20me%20a%20beer🍺-0070BA?style=for-the-badge&logo=paypal&labelColor=555555)](https://paypal.me/odoricof)
 
 ---
 ## Funzionalità
