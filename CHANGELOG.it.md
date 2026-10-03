@@ -1,17 +1,15 @@
 ### 🌐 Lingua / Language
 - [Italiano](CHAMGELOG.it.md) | [English](CHANGELOG.md)
-
-# CHANGELOG
-
 ---
-# ⭐ Ti piace Home Sapiens Assistant?
+### ⭐ Ti piace Home Sapiens Assistant?
 
-## Se questa integrazione ti è utile, lascia una stella al progetto: ci vuole un secondo e mi aiuta a farlo conoscere a più persone. Grazie!
+#### Se questa integrazione ti è utile, lascia una stella al progetto: ci vuole un secondo e mi aiuta a farlo conoscere a più persone, e se vuoi offrimi una birra! Grazie!
 
-[![Lascia una stella](https://img.shields.io/github/stars/odoricof/Home-Sapiens-Assistant?style=for-the-badge&logo=github&label=Give%20a%20star&color=FFC107&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant)
+<a href="https://github.com/odoricof/Home-Sapiens-Assistant"><img src="https://img.shields.io/github/stars/odoricof/Home-Sapiens-Assistant?style=plastic&logo=github&label=GIVE%20A%20STAR&color=FFC107&labelColor=555555" height="28" alt="Give a star"></a> <a href="https://paypal.me/odoricof"><img src="https://img.shields.io/badge/PayPal-BUY%20ME%20A%20BEER🍺🍺🍺-0070BA?style=plastic&logo=paypal&labelColor=555555" height="28" alt="Buy me a beer"></a>
 ---
+# CHANGELOG:
 
-## [2.1.0] - 2026-09-29
+## [2.1.0] - 2026-10-03
 
 ### 🚀 Features
 

@@ -3,7 +3,6 @@
 [![Validate with hassfest](https://img.shields.io/github/actions/workflow/status/odoricof/Home-Sapiens-Assistant/hassfest.yaml?style=plastic&label=hassfest&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant/actions/workflows/hassfest.yaml)
 [![Validate](https://img.shields.io/github/actions/workflow/status/odoricof/Home-Sapiens-Assistant/validate.yml?style=plastic&label=Validate&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant/actions/workflows/validate.yml)  
 [![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads&labelColor=555555&color=41BDF5)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
-[![Buy me a beer](https://img.shields.io/badge/PayPal-Buy%20me%20a%20beer🍺🍺🍺-41BDF5?style=plastic&logo=paypal&labelColor=555555)](https://paypal.me/odoricof)
 
 <img src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo@2x.png" width="96" alt="">
 
@@ -19,6 +18,11 @@
 - Need support for another language? Open an issue and let us know.  
 ---
 - README Version: [English](README.md) | [Italiano](README.it.md)
+---
+#### ⭐ If this integration is useful to you, please give the project a star and, if you like, buy me a beer! Thank you!
+
+<a href="https://github.com/odoricof/Home-Sapiens-Assistant"><img src="https://img.shields.io/github/stars/odoricof/Home-Sapiens-Assistant?style=plastic&logo=github&label=GIVE%20A%20STAR&color=FFC107&labelColor=555555" height="28" alt="Give a star"></a> <a href="https://paypal.me/odoricof"><img src="https://img.shields.io/badge/PayPal-BUY%20ME%20A%20BEER🍺🍺🍺-0070BA?style=plastic&logo=paypal&labelColor=555555" height="28" alt="Buy me a beer"></a>
+
 ---
 ## Features
 

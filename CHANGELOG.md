@@ -1,17 +1,15 @@
 ### 🌐 Language / Lingua
 - [English](CHANGELOG.md) | [Italiano](CHANGELOG.it.md)
-
-# CHANGELOG
-
 ---
-# ⭐ Enjoying Home Sapiens Assistant?
+### ⭐ Enjoying Home Sapiens Assistant?
 
-## If this integration is useful to you, please give the project a star: it takes a second and helps more people discover it. Thank you!
+#### If this integration is useful to you, please give the project a star: it takes a second and helps more people discover it, if you like, buy me a beer! Thank you!
 
-[![Give a star](https://img.shields.io/github/stars/odoricof/Home-Sapiens-Assistant?style=for-the-badge&logo=github&label=Give%20a%20star&color=FFC107&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant)
+<a href="https://github.com/odoricof/Home-Sapiens-Assistant"><img src="https://img.shields.io/github/stars/odoricof/Home-Sapiens-Assistant?style=plastic&logo=github&label=GIVE%20A%20STAR&color=FFC107&labelColor=555555" height="28" alt="Give a star"></a> <a href="https://paypal.me/odoricof"><img src="https://img.shields.io/badge/PayPal-BUY%20ME%20A%20BEER🍺🍺🍺-0070BA?style=plastic&logo=paypal&labelColor=555555" height="28" alt="Buy me a beer"></a>
 ---
+# CHANGELOG:
 
-## [2.1.0] - 2026-09-29
+## [2.1.0] - 2026-10-03
 
 ### 🚀 Features
 
