@@ -1,11 +1,33 @@
 ### 🌐 Lingua / Language
-- [Italiano](Changelog.it.md) | [English](Changelog.md)
+- [Italiano](CHAMGELOG.it.md) | [English](CHANGELOG.md)
 
-# Changelog
-
-Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
+# CHANGELOG
 
 ---
+# ⭐ Ti piace Home Sapiens Assistant?
+
+## Se questa integrazione ti è utile, lascia una stella al progetto: ci vuole un secondo e mi aiuta a farlo conoscere a più persone. Grazie!
+
+[![Lascia una stella](https://img.shields.io/github/stars/odoricof/Home-Sapiens-Assistant?style=for-the-badge&logo=github&label=Give%20a%20star&color=FFC107&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant)
+---
+
+## [2.1.0] - 2026-09-29
+
+### 🚀 Funzionalità
+
+#### Security - Esclusione ingressi
+
+- Aggiunta la funzionalità di esclusione degli ingressi (bypass): è ora possibile escludere singoli ingressi, oppure escludere tutti gli ingressi aperti, prima di armare la centrale.
+
+![loads](images/bypass.png)
+
+### ✨ Miglioramenti
+
+#### Climate - Inserimento più rapido del profilo termico
+
+- Il campo del profilo termico giornaliero ora accetta orari abbreviati: le ore si possono scrivere senza minuti e senza zero iniziale. Ad esempio `6-8=t2` viene letto come `06:00-08:00=t2`. Il formato classico `HH:MM-HH:MM=tN` continua a funzionare.
+- Il simbolo `=` tra l'intervallo orario e il set-point è ora facoltativo e il set-point può essere scritto anche in maiuscolo. Ad esempio `07:00-09:00t2`, `7-9 t2` e `7-9=T2` sono tutti validi.
+- Dopo il salvataggio il profilo viene sempre mostrato nel formato standard `HH:MM-HH:MM=tN`.
 
 ## [2.0.1] - 2026-09-27
 

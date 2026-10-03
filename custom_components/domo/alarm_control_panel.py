@@ -176,12 +176,20 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
         armed_now = {
             a.get("area_id")
             for a in areas
-            if a.get("status") in [42, 58]
+            if a.get("status") in [42, 58, 106, 122]
         }
 
         if not armed_now:
             self._last_armed_state = None
             return AlarmControlPanelState.DISARMED
+
+        bypassed_in_armed_areas = any(
+            inp.get("status") == 5 and any(aid in armed_now for aid in inp.get("areas", []))
+            for inp in data.get("inputs", [])
+        )
+        if bypassed_in_armed_areas:
+            self._last_armed_state = AlarmControlPanelState.ARMED_CUSTOM_BYPASS
+            return self._last_armed_state
 
         scenarios = getattr(device, "_scenarios", {})
         scenario_by_arm = getattr(device, "_scenario_by_arm", {})

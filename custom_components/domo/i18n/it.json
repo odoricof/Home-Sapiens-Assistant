@@ -35,7 +35,10 @@
       "intrusion_detected": "Intrusione rilevata",
       "alarm_memory": "Memoria allarme",
       "open_and_bypassed": "Ingressi aperti e ingressi esclusi",
+      "arming_open_and_bypassed": "Inserimento in corso con ingressi aperti ed esclusi",
       "ready_bypassed": "Pronta con ingressi esclusi",
+      "arming_bypassed": "Inserimento in corso con ingressi esclusi",
+      "armed_bypassed": "Inserita con ingressi esclusi",
       "unknown": "Sconosciuto"
     },
     "input_status": {
@@ -44,6 +47,7 @@
       "alarm_memory": "Memoria allarme",
       "unknown": "Sconosciuto",
       "open": "Aperto",
+      "open_bypassed": "Aperto ed escluso",
       "alarm": "Allarme",
       "low_battery": "Batteria scarica"
     },
@@ -51,6 +55,15 @@
     "action_names": {
       "silence": "CODE - Silenzia sirene",
       "reset_event_memory": "CODE - Reset memoria eventi"
+    },
+    "input_bypass": {
+      "switch_name": "Inclusione {name}",
+      "code_name": "CODE - Esclusione ingressi",
+      "button_name": "Escludi ingressi aperti",
+      "empty_code": "Codice vuoto",
+      "denied_no_code": "Azione negata, inserire codice",
+      "wrong_code": "Codice errato",
+      "correct_code": "Codice corretto"
     },
     "action_feedback": {
       "no_action": "Nessuna azione eseguita",

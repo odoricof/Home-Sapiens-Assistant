@@ -6,6 +6,8 @@ Entities fed by this file:
 - domo/binary_sensor.py       : Security outputs
 - domo/sensor.py              : Security areas, security inputs
 - domo/text.py                : Silencing, reset event memory
+- domo/button.py              : Bypass open inputs
+- domo/switch.py              : Input bypass
 
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
@@ -20,8 +22,10 @@ status: passed
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
+import time
 from typing import Any
 
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -43,7 +47,7 @@ _SCENARIO_ROLE_KEYWORDS: dict[str, list[str]] = {
 
 
 def _match_scenario_role(name: str | None) -> str | None:
-    """Deduce il ruolo (armed_away/night/home) dal nome scenario della centrale."""
+    """Deduce the role (armed_away/night/home) from the central's scenario name."""
     upper = (name or "").upper()
     best_role = None
     best_len = 0
@@ -56,46 +60,47 @@ def _match_scenario_role(name: str | None) -> str | None:
 
 
 # ============================================================
-# ===== DECODIFICA STATI =====
+# ===== STATUS DECODING =====
 # ============================================================
 
 CENTRAL_STATUS_MAP = {
-    0: "disinserita",
-    256: "transizione",
-    1024: "ingressi_non_armati_aperti",
-    1280: "inserita_con_ingressi_esclusi_aperti",
-    2048: "sconosciuto",
-    2304: "violazione",
-    3072: "allarme_intrusione_silenziato",
-    3328: "transizione",
-    4096: "tempo_uscita_con_ingressi_aperti",
-    4352: "tempo_uscita_con_aree_aperte",
-    8192: "pronta",
-    8448: "transizione",
-    9216: "inserita",
-    10240: "allarme_memorizzato",
-    10496: "violazione",
-    11264: "allarme_silenziato",
-    11520: "allarme_innescato",
-    12288: "inserimento_in_corso",
-    14336: "tempo_uscita_con_eventi_memorizzati",
+    0: "disarmed",
+    256: "transition",
+    1024: "unarmed_inputs_open",
+    1280: "armed_with_bypassed_inputs_open",
+    2048: "unknown",
+    2304: "violation",
+    3072: "intrusion_alarm_silenced",
+    3328: "transition",
+    4096: "exit_time_with_open_inputs",
+    4352: "exit_time_with_open_areas",
+    8192: "ready",
+    8448: "transition",
+    9216: "armed",
+    10240: "alarm_memory",
+    10496: "violation",
+    11264: "alarm_silenced",
+    11520: "alarm_triggered",
+    12288: "arming_in_progress",
+    14336: "exit_time_with_stored_events",
 }
 
-# raw proxinet, raw pxc = status
 _AREA_STATUS_GROUPS = (
     ((32, 48), "not_ready"),
-    ((33,), "arming_open_inputs"),
-    ((34,), "input_open_pending_disarm"),
-    ((36,), "intrusion_open_inputs"),
+    ((33, 49), "arming_open_inputs"),
+    ((34, 50), "input_open_pending_disarm"),
+    ((36, 52), "intrusion_open_inputs"),
     ((40, 56), "ready"),
-    ((41,), "arming"),
+    ((41, 57), "arming"),
     ((42, 58), "armed"),
-    ((38, 182), "intrusion_alarm"),
-    ((46,), "intrusion_detected"),
     ((44, 60), "alarm_memory"),
-    ((96,), "open_and_bypassed"),
-    ((104,), "ready_bypassed"),
-    ((190,), "unknown"),
+    ((38, 182), "intrusion_alarm"),
+    ((46, 190), "intrusion_detected"),
+    ((96, 112), "open_and_bypassed"),
+    ((97, 113), "arming_open_and_bypassed"),
+    ((104, 120), "ready_bypassed"),
+    ((105, 121), "arming_bypassed"),
+    ((106, 122), "armed_bypassed"),
 )
 AREA_STATUS_MAP = {code: status for codes, status in _AREA_STATUS_GROUPS for code in codes}
 
@@ -105,11 +110,27 @@ INPUT_STATUS_MAP = {
     9: "alarm_memory",
     16: "unknown",
     17: "open",
+    21: "open_bypassed",
     25: "alarm",
     65: "low_battery",
 }
 
-AREA_NOT_READY_STATUS = {32, 33, 48, 96}
+BYPASSED_INPUT_STATUSES = {5, 21}
+
+AREA_NOT_READY_STATUS = {32, 33, 48, 49, 96, 112}
+
+SICU_INPUT_OPER_INCLUDE = 1
+SICU_INPUT_OPER_EXCLUDE = 2
+INPUT_BYPASS_CODE_WINDOW = 10
+SICU_CODE_LENGTH = 6
+
+
+class InputBypassDenied(ValueError):
+    """Raised when an input bypass command is denied; carries which feedback applies."""
+
+    def __init__(self, feedback: str, message: str):
+        super().__init__(message)
+        self.feedback = feedback
 
 
 TYPE_SECURITY_CENTRAL = -10
@@ -117,17 +138,17 @@ _SECURITY_DEVICE: "SecurityCentral | None" = None
 
 
 # ============================================================
-# ===== SCOPERTA CENTRALE =====
+# ===== CENTRAL DISCOVERY =====
 # ============================================================
 
 async def discover_security(gateway):
-    """Scopri le centrali di sicurezza disponibili."""
+    """Discover the available security central."""
     global _SECURITY_DEVICE
 
     if _SECURITY_DEVICE is not None:
         return _SECURITY_DEVICE
 
-    _LOGGER.info("SECURITY avvio ricerca centrale")
+    _LOGGER.info("SECURITY starting central discovery")
 
     try:
         feat_resp = await gateway.tx_command(
@@ -136,15 +157,15 @@ async def discover_security(gateway):
         )
 
         if not feat_resp:
-            _LOGGER.debug("SECURITY ricerca: nessuna risposta alla feature list")
+            _LOGGER.debug("SECURITY discovery: no response to feature list")
             return None
 
         features = feat_resp.get("list", [])
         if "sicu" not in features:
-            _LOGGER.debug("SECURITY ricerca: feature sicu non supportata")
+            _LOGGER.debug("SECURITY discovery: sicu feature not supported")
             return None
 
-        _LOGGER.info("SECURITY feature sicu supportata")
+        _LOGGER.info("SECURITY sicu feature supported")
 
         areas_resp = await gateway.tx_command({
             "appl_msg_type": "sicu",
@@ -164,13 +185,13 @@ async def discover_security(gateway):
             "central_id": 0
         }, resp_command=None)
 
-        _LOGGER.debug("SECURITY richiesta lista uscite per central_id=0")
+        _LOGGER.debug("SECURITY requesting outputs list for central_id=0")
         outputs_resp = await gateway.tx_command({
             "appl_msg_type": "sicu",
             "cmd_name": "sicu_outputs_list_req",
             "central_id": 0
         }, resp_command=None)
-        _LOGGER.debug("SECURITY risposta uscite: %s", outputs_resp)
+        _LOGGER.debug("SECURITY outputs response: %s", outputs_resp)
 
         central_info = {
             "central_id": 0,
@@ -180,7 +201,7 @@ async def discover_security(gateway):
             "scenarios_num": len(scenarios_resp.get("array", [])) if scenarios_resp else 0
         }
 
-        _LOGGER.info("SECURITY centrale scoperta | central_id=0 name=Proxinet")
+        _LOGGER.info("SECURITY central discovered | central_id=0 name=Proxinet")
 
         _SECURITY_DEVICE = SecurityCentral(gateway, central_info)
 
@@ -196,19 +217,20 @@ async def discover_security(gateway):
         return _SECURITY_DEVICE
 
     except Exception as err:
-        _LOGGER.error("SECURITY ricerca centrale fallita: %s", err)
+        _SECURITY_DEVICE = None
+        _LOGGER.error("SECURITY central discovery failed: %s", err)
         return None
 
 
 # ============================================================
-# ===== RESYNC AL RECONNECT =====
+# ===== RESYNC ON RECONNECT =====
 # ============================================================
 
 async def refresh_all_security(gateway):
-    """Risincronizza aree/ingressi/uscite/scenari dopo un reconnect del gateway."""
+    """Resync areas/inputs/outputs/scenarios after a gateway reconnect."""
 
     if _SECURITY_DEVICE is None:
-        _LOGGER.debug("SECURITY refresh_all ignorato: centrale non ancora scoperta")
+        _LOGGER.debug("SECURITY refresh_all ignored: central not yet discovered")
         return
 
     central_id = _SECURITY_DEVICE.central_id or 0
@@ -242,15 +264,15 @@ async def refresh_all_security(gateway):
         if resp and await _SECURITY_DEVICE.update(resp):
             updated_count += 1
 
-    _LOGGER.info("SECURITY refresh_all completato | risposte aggiornate=%s/4", updated_count)
+    _LOGGER.info("SECURITY refresh_all completed | responses updated=%s/4", updated_count)
 
 
 # ============================================================
-# ===== GESTORE EVENTI =====
+# ===== EVENT HANDLER =====
 # ============================================================
 
 async def handle_security_status_update(_gateway, device_info: dict[str, Any]) -> bool:
-    """Punto unico di ingresso per i pacchetti SECURITY dal gateway."""
+    """Single entry point for SECURITY packets from the gateway."""
     global _SECURITY_DEVICE
 
     cmd = device_info.get("cmd_name")
@@ -259,7 +281,7 @@ async def handle_security_status_update(_gateway, device_info: dict[str, Any]) -
 
     if _SECURITY_DEVICE is None:
         _LOGGER.debug(
-            "SECURITY RX %s ignorato (centrale non ancora scoperta - chiamare discover_security() prima)",
+            "SECURITY RX %s ignored (central not yet discovered - call discover_security() first)",
             cmd,
         )
         return False
@@ -269,11 +291,11 @@ async def handle_security_status_update(_gateway, device_info: dict[str, Any]) -
 
 
 # ============================================================
-# ===== CENTRALE SICUREZZA =====
+# ===== SECURITY CENTRAL =====
 # ============================================================
 
 class SecurityCentral:
-    """Centrale di sicurezza (singleton)."""
+    """Security central (singleton)."""
 
     DEVICE_TYPE = "Security"
 
@@ -282,7 +304,6 @@ class SecurityCentral:
         self._type_id = TYPE_SECURITY_CENTRAL
         self._act_id = None
         self._hass = gateway.hass
-        self._initialized = False
 
         self._state: dict[str, Any] = {
             "central_id": None,
@@ -324,45 +345,22 @@ class SecurityCentral:
         self._outputs_state: dict[int, dict] = {}
         self._outputs: list[dict] = []
 
+        self._bypass_code: str | None = None
+        self._bypass_code_expiry: float = 0.0
+        self._bypass_feedback: str | None = None
+        self._bypass_window_token: int = 0
+        # Serializes code verification and bypass commands towards the central,
+        # so a switch toggled right after typing the code waits for the check.
+        self._bypass_lock = asyncio.Lock()
+
         _LOGGER.debug(
-            "SECURITY device inizializzato | uid=%s | thread=%s | mapping=%s",
+            "SECURITY device initialized | uid=%s | thread=%s | mapping=%s",
             self.unique_id,
             threading.current_thread().name,
             self._scenario_by_arm,
         )
 
-    # --- Richiesta liste ---
-
-    async def _request_all_lists(self):
-        """Richiedi tutte le liste di configurazione."""
-        if self._initialized:
-            return
-
-        _LOGGER.info("SECURITY richiesta liste per central_id=%s", self.central_id)
-
-        await self._gateway.tx_command({
-            "cmd_name": "sicu_areas_list_req",
-            "central_id": self.central_id
-        })
-
-        await self._gateway.tx_command({
-            "cmd_name": "sicu_inputs_list_req",
-            "central_id": self.central_id
-        })
-
-        await self._gateway.tx_command({
-            "cmd_name": "sicu_outputs_list_req",
-            "central_id": self.central_id
-        })
-
-        await self._gateway.tx_command({
-            "cmd_name": "sicu_scenarios_list_req",
-            "central_id": self.central_id
-        })
-
-        self._initialized = True
-
-    # --- Identità ---
+    # --- Identity ---
 
     @property
     def unique_id(self) -> str:
@@ -380,24 +378,45 @@ class SecurityCentral:
     def central_id(self) -> int | None:
         return self._state.get("central_id")
 
-    # --- Aggiornamento centrale ---
+    @property
+    def inputs(self) -> list[dict]:
+        return list(self._inputs)
+
+    # --- Input state helpers ---
+
+    def get_input_status(self, input_id: int) -> int | None:
+        """Return the raw status of a single input, or None if unknown."""
+        entry = self._inputs_state.get(input_id)
+        return entry.get("status") if entry else None
+
+    def is_input_bypassed(self, input_id: int) -> bool:
+        """Return True if the input is bypassed, whether physically closed or still open."""
+        return self.get_input_status(input_id) in BYPASSED_INPUT_STATUSES
+
+    def get_open_input_ids(self) -> list[int]:
+        """Return the ids of all inputs currently open or in alarm."""
+        return [
+            input_id
+            for input_id, entry in self._inputs_state.items()
+            if entry.get("status") in (17, 25)
+        ]
+
+    # --- Packet updates ---
 
     async def update(self, data: dict[str, Any]) -> bool:
-        """Accetta pacchetti sicu_* in qualsiasi ordine. Tutta la logica SECURITY vive qui."""
+        """Accept sicu_* packets in any order. All SECURITY logic lives here."""
         cmd = data.get("cmd_name")
         if not isinstance(cmd, str) or not cmd.startswith("sicu_"):
             return False
 
-        # --- Centrale ---
         if cmd == "sicu_central_status_ind":
             return self._update_central(data)
 
-        # --- Aree ---
         if cmd == "sicu_areas_status_ind":
             return self._update_areas(data)
 
         if cmd == "sicu_areas_list_resp":
-            _LOGGER.info("SECURITY ricevuta lista aree (%d elementi)", len(data.get("array", [])))
+            _LOGGER.info("SECURITY areas list received (%d items)", len(data.get("array", [])))
             for area in data.get("array", []):
                 area_id = area.get("area_id")
                 if area_id is not None:
@@ -407,12 +426,11 @@ class SecurityCentral:
             self._rebuild_snapshot()
 
             for area in self._areas:
-                _LOGGER.debug("SECURITY area: %s (ID: %s, status base: %s)",
+                _LOGGER.debug("SECURITY area: %s (ID: %s, base status: %s)",
                              area.get("name"), area.get("area_id"), area.get("status"))
 
             return True
 
-        # --- Scenari ---
         if cmd == "sicu_scenarios_list_resp":
             self._scenarios.clear()
 
@@ -433,7 +451,7 @@ class SecurityCentral:
                     self._scenario_by_arm["armed_custom_bypass"] = sid
                     break
 
-            _LOGGER.info("SECURITY scenari caricati | count=%s", len(self._scenarios))
+            _LOGGER.info("SECURITY scenarios loaded | count=%s", len(self._scenarios))
 
             for sid, scenario in self._scenarios.items():
                 role = next((r for r, i in self._scenario_by_arm.items() if i == sid), "unknown")
@@ -444,9 +462,8 @@ class SecurityCentral:
                              role)
             return True
 
-        # --- Ingressi ---
         if cmd == "sicu_inputs_list_resp":
-            _LOGGER.info("SECURITY ricevuta lista ingressi (%d elementi)", len(data.get("array", [])))
+            _LOGGER.info("SECURITY inputs list received (%d items)", len(data.get("array", [])))
             for inp in data.get("array", []):
                 input_id = inp.get("input_id")
                 if input_id is not None:
@@ -477,7 +494,7 @@ class SecurityCentral:
             self.update_pending = True
 
             _LOGGER.debug(
-                "SECURITY input aggiornato | id=%s name=%s status=%s areas=%s",
+                "SECURITY input updated | id=%s name=%s status=%s areas=%s",
                 input_id,
                 data.get("name"),
                 data.get("status"),
@@ -485,9 +502,8 @@ class SecurityCentral:
             )
             return True
 
-        # --- Uscite ---
         if cmd == "sicu_outputs_list_resp":
-            _LOGGER.info("SECURITY ricevuta lista uscite (%d elementi)", len(data.get("array", [])))
+            _LOGGER.info("SECURITY outputs list received (%d items)", len(data.get("array", [])))
             for out in data.get("array", []):
                 output_id = out.get("output_id")
                 if output_id is not None:
@@ -515,7 +531,7 @@ class SecurityCentral:
             self.update_pending = True
 
             _LOGGER.debug(
-                "SECURITY output aggiornato | id=%s name=%s status=%s",
+                "SECURITY output updated | id=%s name=%s status=%s",
                 output_id,
                 data.get("name"),
                 data.get("status"),
@@ -523,8 +539,6 @@ class SecurityCentral:
             return True
 
         return False
-
-    # --- Handler specifici ---
 
     def _update_central(self, data: dict[str, Any]) -> bool:
         self._state.update(
@@ -545,7 +559,7 @@ class SecurityCentral:
         self.update_pending = True
 
         _LOGGER.debug(
-            "SECURITY centrale aggiornata | id=%s status=%s",
+            "SECURITY central updated | id=%s status=%s",
             self._state.get("central_id"),
             self._state.get("status"),
         )
@@ -566,39 +580,36 @@ class SecurityCentral:
         self.update_pending = True
 
         _LOGGER.debug(
-            "SECURITY aree aggiornate | count=%s | known=%s",
+            "SECURITY areas updated | count=%s | known=%s",
             len(self._areas),
             sorted(self._known_area_ids),
         )
         return True
 
-    # --- Decodifica stato ---
+    # --- Status decoding ---
 
     @staticmethod
     def decode_central_status(raw):
         if raw is None:
             return None
-        return {"raw": raw, "state": CENTRAL_STATUS_MAP.get(raw, f"sconosciuto_{raw}")}
+        return {"raw": raw, "state": CENTRAL_STATUS_MAP.get(raw, f"unknown_{raw}")}
 
     @staticmethod
     def decode_area_status(raw):
         if raw is None:
             return None
-        return {"raw": raw, "state": AREA_STATUS_MAP.get(raw, f"sconosciuto_{raw}")}
+        return {"raw": raw, "state": AREA_STATUS_MAP.get(raw, f"unknown_{raw}")}
 
     @staticmethod
     def decode_input_status(raw):
         if raw is None:
             return None
-        return {"raw": raw, "state": INPUT_STATUS_MAP.get(raw, f"sconosciuto_{raw}")}
+        return {"raw": raw, "state": INPUT_STATUS_MAP.get(raw, f"unknown_{raw}")}
 
-    # --- Readiness scenario ---
+    # --- Scenario readiness ---
 
     def scenario_ready(self, arm_key: str) -> tuple[bool, list[str]]:
-        """Verifica se tutte le aree coinvolte nello scenario di un ruolo sono pronte.
-
-        Ritorna (pronto, nomi_aree_non_pronte).
-        """
+        """Return (ready, names of not-ready areas) for the areas of a role's scenario."""
         scenario_id = self._scenario_by_arm.get(arm_key)
         target_area_ids = set(self._scenarios.get(scenario_id, {}).get("areas", []))
 
@@ -613,14 +624,16 @@ class SecurityCentral:
 
         return (len(not_ready) == 0), not_ready
 
+    # --- Commands ---
+
     async def arm(self, arm_type: str, code: str | None = None):
         scenario_id = self._scenario_by_arm.get(arm_type)
         if scenario_id is None:
-            _LOGGER.error("SECURITY nessuno scenario per %s", arm_type)
+            _LOGGER.error("SECURITY no scenario for %s", arm_type)
             return
 
         if not code:
-            _LOGGER.debug("SECURITY chiamata arm preliminare senza codice (%s)", arm_type)
+            _LOGGER.debug("SECURITY preliminary arm call without code (%s)", arm_type)
             return
 
         payload = {
@@ -666,7 +679,7 @@ class SecurityCentral:
         await self._gateway.tx_command(payload, resp_command=None)
 
     async def reset_event_memory(self, code: str | None = None):
-        _LOGGER.debug("SECURITY reset_event_memory chiamato | code=%s", code)
+        _LOGGER.debug("SECURITY reset_event_memory called | code_provided=%s", bool(code))
         if not self._gateway:
             return
 
@@ -682,7 +695,7 @@ class SecurityCentral:
         await self._gateway.tx_command(payload, resp_command=None)
 
     async def silence(self, code: str | None = None):
-        """Tacita sirene/allarme in corso."""
+        """Silence the active siren/alarm."""
         if not self._gateway:
             return
 
@@ -696,6 +709,149 @@ class SecurityCentral:
         }
 
         await self._gateway.tx_command(payload, resp_command=None)
+
+    # --- Input bypass ---
+
+    def start_input_bypass_window(self, code: str) -> None:
+        """Open a time-limited window during which set_input_bypass() accepts `code`."""
+        self._bypass_code = code
+        self._extend_input_bypass_window()
+
+        _LOGGER.info(
+            "SECURITY input bypass window opened | duration=%ss",
+            INPUT_BYPASS_CODE_WINDOW,
+        )
+
+    def _extend_input_bypass_window(self) -> None:
+        """Reset the countdown to INPUT_BYPASS_CODE_WINDOW seconds and schedule its expiry."""
+        self._bypass_code_expiry = time.monotonic() + INPUT_BYPASS_CODE_WINDOW
+        self._bypass_window_token += 1
+        my_token = self._bypass_window_token
+
+        async def _expire():
+            await asyncio.sleep(INPUT_BYPASS_CODE_WINDOW)
+            if my_token == self._bypass_window_token:
+                self._bypass_code = None
+                if self._hass:
+                    async_dispatcher_send(self._hass, SIGNAL_UPDATE_ENTITY)
+
+        if self._hass:
+            self._hass.async_create_task(_expire())
+            async_dispatcher_send(self._hass, SIGNAL_UPDATE_ENTITY)
+
+    @property
+    def input_bypass_window_active(self) -> bool:
+        return self._bypass_code is not None and time.monotonic() < self._bypass_code_expiry
+
+    def _report_bypass_feedback(self, feedback: str) -> None:
+        """Store transient bypass feedback for the code text entity to display."""
+        self._bypass_feedback = feedback
+        if self._hass:
+            async_dispatcher_send(self._hass, SIGNAL_UPDATE_ENTITY)
+
+    def pop_bypass_feedback(self) -> str | None:
+        """Return and clear the last bypass feedback, if any (consumed once)."""
+        feedback = self._bypass_feedback
+        self._bypass_feedback = None
+        return feedback
+
+    async def verify_and_open_bypass_window(self, code: str) -> bool:
+        """Verify `code` against the central with a harmless no-op command before
+        opening the input bypass window. Returns True if the code was accepted.
+        """
+        async with self._bypass_lock:
+            probe_id = self._get_bypass_probe_input_id()
+            if probe_id is None:
+                self.start_input_bypass_window(code)
+                return True
+
+            try:
+                await self._send_bypass_wire_command(code, [probe_id], False)
+            except ValueError:
+                self._bypass_code = None
+                return False
+
+            self.start_input_bypass_window(code)
+            return True
+
+    def _get_bypass_probe_input_id(self) -> int | None:
+        """Return the id of an already-included input, safe to use as a no-op code probe."""
+        for input_id in self._inputs_state:
+            if not self.is_input_bypassed(input_id):
+                return input_id
+        return None
+
+    async def set_input_bypass(self, input_id: int, exclude: bool) -> None:
+        """Bypass (exclude) or restore (include) a single alarm input.
+
+        Requires a code opened via start_input_bypass_window() within the last
+        INPUT_BYPASS_CODE_WINDOW seconds.
+        """
+        await self._send_input_bypass_command([input_id], exclude)
+
+    async def bypass_open_inputs(self) -> list[int]:
+        """Exclude every currently open (or in alarm) input in a single command.
+
+        Requires a code opened via start_input_bypass_window() within the last
+        INPUT_BYPASS_CODE_WINDOW seconds. Returns the ids that were excluded.
+        """
+        async with self._bypass_lock:
+            open_ids = self.get_open_input_ids()
+            if open_ids:
+                await self._send_input_bypass_command_locked(open_ids, True)
+            else:
+                self._ensure_bypass_window()
+            return open_ids
+
+    def _ensure_bypass_window(self) -> None:
+        if not self.input_bypass_window_active:
+            self._report_bypass_feedback("no_code")
+            raise InputBypassDenied("no_code", "Input bypass code window expired or not started")
+
+    async def _send_input_bypass_command(self, input_ids: list[int], exclude: bool) -> None:
+        # Waits here if the code is still being verified by the central.
+        async with self._bypass_lock:
+            await self._send_input_bypass_command_locked(input_ids, exclude)
+
+    async def _send_input_bypass_command_locked(self, input_ids: list[int], exclude: bool) -> None:
+        self._ensure_bypass_window()
+        await self._send_bypass_wire_command(self._bypass_code, input_ids, exclude)
+        self._extend_input_bypass_window()
+
+    async def _send_bypass_wire_command(self, code: str, input_ids: list[int], exclude: bool) -> None:
+        """Send sicu_multi_input_set_req and raise ValueError if the central rejects it."""
+        payload = {
+            "cmd_name": "sicu_multi_input_set_req",
+            "central_id": self.central_id,
+            "code": code,
+            "client": "",
+            "appl_msg_type": "sicu",
+            "cseq": self._gateway.get_cseq(),
+            "id": input_ids,
+            "oper": SICU_INPUT_OPER_EXCLUDE if exclude else SICU_INPUT_OPER_INCLUDE,
+        }
+
+        _LOGGER.info(
+            "SECURITY TX | input bypass | input_ids=%s exclude=%s",
+            input_ids, exclude,
+        )
+
+        ack = await self._gateway.tx_command(payload, resp_command="sicu_multi_input_set_ack")
+
+        if not ack:
+            _LOGGER.warning(
+                "SECURITY input bypass no confirmation from central | input_ids=%s",
+                input_ids,
+            )
+            return
+
+        if ack.get("ack_type"):
+            _LOGGER.warning(
+                "SECURITY input bypass rejected by central | input_ids=%s ack_type=%s",
+                input_ids, ack.get("ack_type"),
+            )
+            self._report_bypass_feedback("wrong_code")
+            raise InputBypassDenied("wrong_code", "Input bypass command rejected by central unit")
 
     # --- Snapshot ---
 
@@ -721,5 +877,5 @@ class SecurityCentral:
 
 
 def get_security_device():
-    """Ritorna il singleton della centrale SECURITY, se disponibile."""
+    """Return the SECURITY central singleton, if available."""
     return _SECURITY_DEVICE

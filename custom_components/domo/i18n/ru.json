@@ -35,7 +35,10 @@
       "intrusion_detected": "Обнаружено вторжение",
       "alarm_memory": "Память тревоги",
       "open_and_bypassed": "Открытые и отключенные зоны",
+      "arming_open_and_bypassed": "Постановка с открытыми и отключенными зонами",
       "ready_bypassed": "Готова, с отключенными зонами",
+      "arming_bypassed": "Постановка с отключенными зонами",
+      "armed_bypassed": "На охране, зоны отключены",
       "unknown": "Неизвестно"
     },
     "input_status": {
@@ -44,6 +47,7 @@
       "alarm_memory": "Память тревоги",
       "unknown": "Неизвестно",
       "open": "Открыт",
+      "open_bypassed": "Открыт и отключен",
       "alarm": "Тревога",
       "low_battery": "Низкий заряд батареи"
     },
@@ -51,6 +55,15 @@
     "action_names": {
       "silence": "CODE - Отключить сирены",
       "reset_event_memory": "CODE - Сброс памяти событий"
+    },
+    "input_bypass": {
+      "switch_name": "Включение {name}",
+      "code_name": "CODE - Исключение зон",
+      "button_name": "Отключить открытые зоны",
+      "empty_code": "Пустой код",
+      "denied_no_code": "Действие отклонено, введите код",
+      "wrong_code": "Неверный код",
+      "correct_code": "Верный код"
     },
     "action_feedback": {
       "no_action": "Действие не выполнено",

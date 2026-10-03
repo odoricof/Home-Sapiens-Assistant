@@ -35,7 +35,10 @@
       "intrusion_detected": "Intrusión detectada",
       "alarm_memory": "Memoria de alarma",
       "open_and_bypassed": "Entradas abiertas y anuladas",
+      "arming_open_and_bypassed": "Armando con entradas abiertas y anuladas",
       "ready_bypassed": "Lista con entradas anuladas",
+      "arming_bypassed": "Armando con entradas anuladas",
+      "armed_bypassed": "Armada con entradas anuladas",
       "unknown": "Desconocido"
     },
     "input_status": {
@@ -44,6 +47,7 @@
       "alarm_memory": "Memoria de alarma",
       "unknown": "Desconocido",
       "open": "Abierto",
+      "open_bypassed": "Abierto y anulado",
       "alarm": "Alarma",
       "low_battery": "Batería baja"
     },
@@ -51,6 +55,15 @@
     "action_names": {
       "silence": "CODE - Silenciar sirenas",
       "reset_event_memory": "CODE - Restablecer memoria de eventos"
+    },
+    "input_bypass": {
+      "switch_name": "Inclusión {name}",
+      "code_name": "CODE - Exclusión de entradas",
+      "button_name": "Anular entradas abiertas",
+      "empty_code": "Código vacío",
+      "denied_no_code": "Acción denegada, introduzca el código",
+      "wrong_code": "Código incorrecto",
+      "correct_code": "Código correcto"
     },
     "action_feedback": {
       "no_action": "Ninguna acción realizada",

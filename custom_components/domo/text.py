@@ -44,7 +44,7 @@ from .platforms.scheduler import (
     get_all_timers,
     async_set_timer_timetable,
 )
-from .platforms.sicu import get_security_device, CENTRAL_STATUS_MAP
+from .platforms.sicu import get_security_device, CENTRAL_STATUS_MAP, SICU_CODE_LENGTH
 from .services.i18n import async_get_translated_strings
 from .platforms.thermoregulation import (
     DomoThermostat,
@@ -133,6 +133,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     )
 
     hass.data[DOMAIN].setdefault("_sicu_action_texts_added", False)
+    hass.data[DOMAIN].setdefault("_sicu_input_bypass_text_added", False)
 
     # --- Scenarios (create / rename / delete) ---
     scenario_device = get_scenario_device()
@@ -163,6 +164,31 @@ async def async_setup_entry(hass, entry, async_add_entities):
         _LOGGER.info("Added 2 text entities for SICU actions (silence / reset_event_memory)")
     else:
         _LOGGER.debug("SECURITY central not yet available, skipping SICU action texts")
+
+    # --- Security (input bypass code) ---
+    if get_security_device() and not hass.data[DOMAIN]["_sicu_input_bypass_text_added"]:
+        burglar_alarm_device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, "burglar_alarm"), entry.entry_id
+        )
+        security_inputs_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "burglar_alarm_inputs")},
+            name="Security Inputs",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
+            via_device_id=burglar_alarm_device.id if burglar_alarm_device else None,
+        )
+        sicu_input_strings = await async_get_translated_strings(hass, "sicu_entities")
+        async_add_entities([
+            DomoSicuInputBypassCodeText(
+                entry.entry_id,
+                sicu_input_strings.get("input_bypass.code_name", "CODE - Bypass inputs"),
+                security_inputs_device_info,
+            )
+        ])
+        hass.data[DOMAIN]["_sicu_input_bypass_text_added"] = True
+        _LOGGER.info("Added text entity for SICU input bypass code")
+    else:
+        _LOGGER.debug("SECURITY central not yet available, skipping SICU input bypass code text")
 
 
 # ============================================================
@@ -632,6 +658,102 @@ class DomoSicuActionText(TextEntity):
     def _handle_update(self, entity_id: str = None):
         if entity_id is None or entity_id == self._attr_unique_id:
             self.async_write_ha_state()
+
+
+# ============================================================
+# ===== SECURITY (input bypass code) =====
+# ============================================================
+
+class DomoSicuInputBypassCodeText(TextEntity):
+    """Write-only text: the entered code opens a time-limited window during which
+    the security input bypass switches can exclude/restore inputs. Appears in the
+    'Security Inputs' device (same device as the per-input sensors and switches)."""
+
+    _attr_should_poll = False
+    _attr_mode = TextMode.TEXT
+    _attr_native_min = 0
+    _attr_native_max = 40
+    _attr_icon = "mdi:shield-key-outline"
+
+    _FEEDBACK_KEYS = {
+        "no_code": ("input_bypass.denied_no_code", "Action denied, enter code"),
+        "wrong_code": ("input_bypass.wrong_code", "Wrong code"),
+    }
+
+    def __init__(self, entry_id: str, name: str, device_info: DeviceInfo):
+        self._attr_unique_id = f"{entry_id}_sicu_input_bypass_code"
+        self._attr_name = name
+        self._attr_device_info = device_info
+        self._pending_display: str | None = None
+        self._attempt_token: int = 0
+        self._i18n: dict = {}
+
+    @property
+    def native_value(self) -> str:
+        return self._pending_display or ""
+
+    async def async_set_value(self, value: str) -> None:
+        code = value.strip()
+        device = get_security_device()
+        if not device:
+            raise HomeAssistantError("Security central unit not available")
+
+        self._attempt_token += 1
+        my_token = self._attempt_token
+
+        if not code:
+            self._show_transient_message(self._i18n.get("input_bypass.empty_code", "Empty code"), my_token)
+            return
+
+        if not (code.isdigit() and len(code) == SICU_CODE_LENGTH):
+            self._show_transient_message(self._feedback_message("wrong_code"), my_token)
+            return
+
+        accepted = await device.verify_and_open_bypass_window(code)
+        if not accepted:
+            return
+
+        self._show_transient_message(self._i18n.get("input_bypass.correct_code", "Correct code"), my_token)
+
+    def _show_transient_message(self, message: str, token: int) -> None:
+        """Shows `message` in the field for 2 seconds, then reverts to empty."""
+        self._pending_display = message
+        self.async_write_ha_state()
+
+        async def _revert():
+            await asyncio.sleep(2)
+            if token == self._attempt_token:
+                self._pending_display = None
+                self.async_write_ha_state()
+
+        if self.hass:
+            self.hass.async_create_task(_revert())
+
+    def _feedback_message(self, feedback: str) -> str:
+        key, fallback = self._FEEDBACK_KEYS.get(feedback, (None, "Error"))
+        if key is None:
+            return fallback
+        return self._i18n.get(key, fallback)
+
+    async def async_added_to_hass(self):
+        self._i18n = await async_get_translated_strings(self.hass, "sicu_entities")
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, entity_id: str = None):
+        if entity_id is not None and entity_id != self._attr_unique_id:
+            return
+
+        device = get_security_device()
+        feedback = device.pop_bypass_feedback() if device else None
+        if feedback:
+            self._attempt_token += 1
+            self._show_transient_message(self._feedback_message(feedback), self._attempt_token)
+            return
+
+        self.async_write_ha_state()
 
 
 # ============================================================

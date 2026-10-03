@@ -103,8 +103,13 @@ def _slot_to_time_str(slot_index: int) -> str:
 
 
 def _time_str_to_slot(time_str: str) -> int:
-    """Converts an HH:MM string into a quarter-hour slot index (0-96)."""
-    hour, minute = (int(x) for x in time_str.split(":"))
+#   """Converts an HH:MM string into a quarter-hour slot index (0-96)."""
+#    hour, minute = (int(x) for x in time_str.split(":"))
+    """Converts an H, HH or HH:MM string into a quarter-hour slot index (0-96)."""
+    hour, _, minute = time_str.partition(":")
+    hour, minute = int(hour), int(minute or 0)    
+    
+    
     total_minutes = hour * 60 + minute
     slot = round(total_minutes / QUARTER_MINUTES)
     return max(0, min(slot, 96))
@@ -135,7 +140,9 @@ def _parse_schedule_blocks(schedule_str: str) -> List[tuple]:
         raw_block = raw_block.strip()
         if not raw_block:
             continue
-        rng, name = raw_block.split("=")
+#        rng, name = raw_block.split("=")
+        rng, t_char, t_num = raw_block.replace("=", "").lower().partition("t")
+        name = t_char + t_num        
         start, end = rng.split("-")
         char = SETPOINT_TO_PROFILE_CHAR.get(name.strip())
         if char is None:

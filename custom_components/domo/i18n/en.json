@@ -35,7 +35,10 @@
       "intrusion_detected": "Intrusion detected",
       "alarm_memory": "Alarm memory",
       "open_and_bypassed": "Open and bypassed inputs",
+      "arming_open_and_bypassed": "Arming with open and bypassed inputs",
       "ready_bypassed": "Ready with bypassed inputs",
+      "arming_bypassed": "Arming with bypassed inputs",
+      "armed_bypassed": "Armed with bypassed inputs",
       "unknown": "Unknown"
     },
     "input_status": {
@@ -44,6 +47,7 @@
       "alarm_memory": "Alarm memory",
       "unknown": "Unknown",
       "open": "Open",
+      "open_bypassed": "Open and bypassed",
       "alarm": "Alarm",
       "low_battery": "Low battery"
     },
@@ -51,6 +55,15 @@
     "action_names": {
       "silence": "CODE - Silence sirens",
       "reset_event_memory": "CODE - Reset event memory"
+    },
+    "input_bypass": {
+      "switch_name": "Inclusion {name}",
+      "code_name": "CODE - Bypass inputs",
+      "button_name": "Bypass open inputs",
+      "empty_code": "Empty code",
+      "denied_no_code": "Action denied, enter code",
+      "wrong_code": "Wrong code",
+      "correct_code": "Correct code"
     },
     "action_feedback": {
       "no_action": "No action performed",

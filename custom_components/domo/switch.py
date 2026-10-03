@@ -6,6 +6,7 @@ Entities fed by:
 - platforms/scheduler.py
 - platforms/irrigation.py
 - platforms/loadsctrl.py
+- platforms/sicu.py
 
 Custom integration: Home-Sapiens-Assistant
 Author: Flavio Odorico (github.com/odoricof)
@@ -54,6 +55,7 @@ from .platforms.scheduler import (
     async_set_timer_enabled,
     get_all_timers,
 )
+from .platforms.sicu import get_security_device, InputBypassDenied
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -180,6 +182,33 @@ async def async_setup_entry(hass, entry, async_add_entities):
             hass, SIGNAL_DISCOVERY_NEW.format("loadsctrl_switch"), _async_new_loadsctrl_relay
         )
     )
+
+    # --- Security (input bypass) ---
+    security = get_security_device()
+    if security and security.inputs:
+        burglar_alarm_device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, "burglar_alarm"), entry.entry_id
+        )
+        security_inputs_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "burglar_alarm_inputs")},
+            name="Security Inputs",
+            manufacturer="Home Sapiens Assistant",
+            model="Eti/Domo",
+            via_device_id=burglar_alarm_device.id if burglar_alarm_device else None,
+        )
+        sicu_strings = await async_get_translated_strings(hass, "sicu_entities")
+        entities = [
+            SecurityInputBypassSwitch(
+                security, inp.get("input_id"), inp.get("name", f"Input {inp.get('input_id')}"),
+                security_inputs_device_info, sicu_strings,
+            )
+            for inp in security.inputs
+            if inp.get("input_id") is not None
+        ]
+        async_add_entities(entities)
+        _LOGGER.info("Added %d switch entities for security input bypass", len(entities))
+    else:
+        _LOGGER.debug("SECURITY central not yet available, skipping input bypass switches")
 
 
 # ============================================================
@@ -643,3 +672,65 @@ class DomoLoadCtrlRelaySwitch(SwitchEntity):
     def _handle_update(self, entity_id: str = None):
         if entity_id is None or entity_id == self._attr_unique_id:
             self.async_write_ha_state()
+            
+            
+# ============================================================
+# ===== SECURITY (input bypass) =====
+# ============================================================
+
+class SecurityInputBypassSwitch(SwitchEntity):
+    """Switch to include (on, default) or bypass/exclude (off) a single alarm input."""
+
+    _attr_should_poll = False
+
+    _FEEDBACK_KEYS = {
+        "no_code": ("input_bypass.denied_no_code", "Action denied, enter code"),
+        "wrong_code": ("input_bypass.wrong_code", "Wrong code"),
+    }
+
+    def __init__(self, security, input_id: int, name: str, device_info: DeviceInfo, strings: dict):
+        self._security = security
+        self._input_id = input_id
+        self._attr_unique_id = f"{security.unique_id}_input_{input_id}_bypass"
+        self._attr_name = strings.get("input_bypass.switch_name", "Inclusion {name}").format(name=name)
+        self._attr_device_info = device_info
+
+    @property
+    def is_on(self) -> bool:
+        """On means the input is included (normal); off means it is bypassed (excluded)."""
+        return not self._security.is_input_bypassed(self._input_id)
+
+    @property
+    def icon(self) -> str:
+        return "mdi:shield-check" if self._security.input_bypass_window_active else "mdi:cancel"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"raw_status": self._security.get_input_status(self._input_id)}
+
+    async def async_turn_on(self, **kwargs):
+        await self._async_set_bypass(False)
+
+    async def async_turn_off(self, **kwargs):
+        await self._async_set_bypass(True)
+
+    async def _async_set_bypass(self, exclude: bool) -> None:
+        try:
+            await self._security.set_input_bypass(self._input_id, exclude)
+        except InputBypassDenied as err:
+            strings = await async_get_translated_strings(self.hass, "sicu_entities")
+            key, fallback = self._FEEDBACK_KEYS.get(err.feedback, (None, str(err)))
+            message = strings.get(key, fallback) if key else fallback
+            raise HomeAssistantError(message) from err
+        except Exception as err:
+            raise HomeAssistantError(f"Error sending sicu_multi_input_set_req: {err}") from err
+
+    async def async_added_to_hass(self):
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
+        )
+
+    @callback
+    def _handle_update(self, entity_id: str = None):
+        if entity_id is None or entity_id == self._attr_unique_id:
+            self.async_write_ha_state()            

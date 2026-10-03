@@ -507,6 +507,22 @@ class SecurityInputSensor(SensorEntity):
 # ===== SECURITY AREAS =====
 # ============================================================
 
+_AREA_STATUS_ICONS = {
+    "armed": "mdi:shield-check",
+    "armed_bypassed": "mdi:shield-edit",
+    "ready_bypassed": "mdi:shield-edit",
+    "arming": "mdi:shield-sync",
+    "arming_bypassed": "mdi:shield-sync",
+    "arming_open_and_bypassed": "mdi:shield-sync",
+    "intrusion_alarm": "mdi:alarm-light",
+    "intrusion_detected": "mdi:alarm-light",
+    "alarm_memory": "mdi:bell-alert",
+    "not_ready": "mdi:shield-lock-open",
+    "arming_open_inputs": "mdi:shield-lock-open",
+    "open_and_bypassed": "mdi:shield-lock-open",
+}
+
+
 class SecurityAreaSensor(SensorEntity):
     """Sensor for a security panel area."""
 
@@ -522,7 +538,6 @@ class SecurityAreaSensor(SensorEntity):
         self._raw_status = None
         self._i18n = {}
 
-
         for area in security._areas:
             if area.get("area_id") == area_id:
                 raw_status = area.get("status")
@@ -535,17 +550,7 @@ class SecurityAreaSensor(SensorEntity):
     @property
     def icon(self) -> str:
         """Icon based on the state."""
-        if self._status_key == "armed":
-            return "mdi:shield-check"
-        if self._status_key == "arming":
-            return "mdi:shield-sync"
-        if self._status_key == "intrusion_alarm":
-            return "mdi:alarm-light"
-        if self._status_key == "alarm_memory":
-            return "mdi:bell-alert"
-        if self._status_key == "not_ready":
-            return "mdi:shield-lock-open"
-        return "mdi:shield"
+        return _AREA_STATUS_ICONS.get(self._status_key, "mdi:shield")
 
     @property
     def native_value(self) -> str:
@@ -582,7 +587,7 @@ class SecurityAreaSensor(SensorEntity):
         _LOGGER.debug(
             "sicu_entities i18n loaded: hass.config.language=%s, keys_loaded=%d",
             self.hass.config.language, len(self._i18n),
-        )        
+        )
         self.async_on_remove(
             async_dispatcher_connect(self.hass, SIGNAL_UPDATE_ENTITY, self._handle_update)
         )

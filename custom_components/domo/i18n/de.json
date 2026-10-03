@@ -35,7 +35,10 @@
       "intrusion_detected": "Einbruch erkannt",
       "alarm_memory": "Alarmspeicher",
       "open_and_bypassed": "Offene und überbrückte Eingänge",
+      "arming_open_and_bypassed": "Scharfschaltung mit offenen und überbrückten Eingängen",
       "ready_bypassed": "Bereit mit überbrückten Eingängen",
+      "arming_bypassed": "Scharfschaltung mit überbrückten Eingängen",
+      "armed_bypassed": "Scharf mit überbrückten Eingängen",
       "unknown": "Unbekannt"
     },
     "input_status": {
@@ -44,6 +47,7 @@
       "alarm_memory": "Alarmspeicher",
       "unknown": "Unbekannt",
       "open": "Offen",
+      "open_bypassed": "Offen und überbrückt",
       "alarm": "Alarm",
       "low_battery": "Batterie schwach"
     },
@@ -51,6 +55,15 @@
     "action_names": {
       "silence": "CODE - Sirenen stummschalten",
       "reset_event_memory": "CODE - Ereignisspeicher zurücksetzen"
+    },
+    "input_bypass": {
+      "switch_name": "Einbeziehung {name}",
+      "code_name": "CODE - Ausschluss der Eingänge",
+      "button_name": "Offene Eingänge überbrücken",
+      "empty_code": "Leerer Code",
+      "denied_no_code": "Aktion verweigert, Code eingeben",
+      "wrong_code": "Falscher Code",
+      "correct_code": "Code korrekt"
     },
     "action_feedback": {
       "no_action": "Keine Aktion ausgeführt",
