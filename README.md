@@ -62,11 +62,13 @@ Currently supported:
    - Trigger and alarm notifications
    - Siren silencing
    - Event memory deletion
+   - Input bypass
    
 - Lights
    - On/Off
    - Dimmers
    - RGB
+     - Slider: brightness / brightness+saturation
    
 - Load control
    - Full replication of all functions exposed for reading and writing

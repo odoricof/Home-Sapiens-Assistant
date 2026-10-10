@@ -3,6 +3,7 @@ domo/platforms/lights.py
 
 Entities fed by this file:
 - domo/light.py : consumes get_all_lights() and DomoLight objects to create and update light entities
+- domo/select.py : exposes the RGB slider profile select (one per RGB light)
 - domo/__init__.py : calls discover_lights() / refresh_all_lights() and registers handle_light_status_update() as gateway event callback
 
 Custom integration: Home-Sapiens-Assistant
@@ -21,9 +22,12 @@ import asyncio
 import logging
 from typing import Any
 
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.entity import DeviceInfo
 
-from ..const import SIGNAL_UPDATE_ENTITY
+from ..const import DOMAIN, SIGNAL_UPDATE_ENTITY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +35,50 @@ _LOGGER = logging.getLogger(__name__)
 LIGHT_TYPES = ["STEP_STEP", "DIMMER", "rgb"]
 
 _LIGHTS: dict[int, "DomoLight"] = {}
+
+
+# ============================================================
+# ===== RGB SLIDER PROFILES =====
+# ============================================================
+
+# "intensity": the slider changes only the brightness of the chosen color.
+# "intensity_saturation": same behaviour as the official CAME app. The slider
+#   goes black -> pure color (first half) -> white (second half).
+SLIDER_PROFILE_INTENSITY = "intensity"
+SLIDER_PROFILE_INTENSITY_SATURATION = "intensity_saturation"
+SLIDER_PROFILES = (SLIDER_PROFILE_INTENSITY, SLIDER_PROFILE_INTENSITY_SATURATION)
+DEFAULT_SLIDER_PROFILE = SLIDER_PROFILE_INTENSITY
+
+# Below this saturation (%) the hue read from the bus is too close to white
+# to be trusted, so the last reliable hue is kept.
+HUE_MIN_SATURATION = 20.0
+
+
+def slider_to_hsv(hue: float, slider: float) -> tuple[float, float, float]:
+    """Return (hue, saturation %, brightness %) for a slider position 0-100.
+
+    Official app profile:
+    - slider 0-50: the color stays pure (saturation 100), brightness 0 -> 100
+    - slider 50-100: brightness stays 100, saturation 100 -> 0 (white)
+    """
+    slider = max(0.0, min(100.0, slider))
+    if slider <= 50.0:
+        return (hue, 100.0, slider * 2.0)
+    return (hue, (100.0 - slider) * 2.0, 100.0)
+
+
+def rgb_to_slider(r: int, g: int, b: int) -> float:
+    """Return the slider position 0-100 matching an RGB color of the profile.
+
+    On the outer edge of the color wheel the lowest channel is 0: only the
+    brightness changes (first half). Otherwise the lowest channel grows from 0
+    to 255 while moving towards white (second half).
+    """
+    highest = max(r, g, b)
+    lowest = min(r, g, b)
+    if lowest <= 0:
+        return highest / 255.0 * 50.0
+    return 50.0 + lowest / 255.0 * 50.0
 
 
 # ============================================================
@@ -156,6 +204,39 @@ def get_all_lights() -> list["DomoLight"]:
 
 
 # ============================================================
+# ===== DEVICE HELPERS =====
+# ============================================================
+
+@callback
+def async_ensure_lights_parent_device(hass: HomeAssistant, entry) -> str:
+    """Make sure the parent "Lights" device exists and return its registry id."""
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{entry.entry_id}_lights")},
+        name="Lights",
+        manufacturer="Home Sapiens Assistant",
+        model="Eti/Domo",
+    )
+    return device.id
+
+
+@callback
+def rgb_light_device_info(hass: HomeAssistant, entry, light: "DomoLight") -> DeviceInfo:
+    """DeviceInfo of an RGB light: a child device of "Lights".
+
+    Same identifiers used in domo/light.py and domo/select.py.
+    """
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{entry.entry_id}_light_{light.act_id}")},
+        name=light.name,
+        manufacturer="Home Sapiens Assistant",
+        model="Eti/Domo",
+        via_device_id=async_ensure_lights_parent_device(hass, entry),
+        suggested_area=light.room,
+    )
+
+
+# ============================================================
 # ===== LIGHT ENTITY MODEL =====
 # ============================================================
 
@@ -174,6 +255,7 @@ class DomoLight:
         self._state = light_data.get("status", 0)
         self._brightness = light_data.get("perc", 0)
         self._rgb = light_data.get("rgb", [0, 0, 0])
+        self._slider_profile = DEFAULT_SLIDER_PROFILE
 
         _LOGGER.debug("LIGHT created: %s (ID: %d, type: %s)",
                      self._name, self._act_id, self._type)
@@ -223,6 +305,17 @@ class DomoLight:
         """Return the RGB color."""
         r, g, b = self._rgb
         return (r, g, b)
+
+    @property
+    def slider_profile(self) -> str:
+        """Return the slider profile used by the slider (RGB lights only)."""
+        return self._slider_profile
+
+    def set_slider_profile(self, profile: str) -> None:
+        """Set the slider profile used by the slider (RGB lights only)."""
+        if profile not in SLIDER_PROFILES:
+            raise ValueError(f"Invalid slider profile: {profile}")
+        self._slider_profile = profile
 
     async def turn_on(self, brightness: int | None = None, rgb: tuple | None = None):
         """Turn on the light."""

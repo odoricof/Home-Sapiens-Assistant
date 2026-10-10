@@ -132,9 +132,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
         )
     )
 
-    hass.data[DOMAIN].setdefault("_sicu_action_texts_added", False)
-    hass.data[DOMAIN].setdefault("_sicu_input_bypass_text_added", False)
-
     # --- Scenarios (create / rename / delete) ---
     scenario_device = get_scenario_device()
     if scenario_device:
@@ -146,6 +143,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         _LOGGER.debug("Scenario device not yet available, skipping scenario text entity")
 
     # --- Security (central actions: silence / reset_event_memory) ---
+    hass.data[DOMAIN]["_sicu_action_texts_added"] = False
+    hass.data[DOMAIN]["_sicu_input_bypass_text_added"] = False
     if get_security_device() and not hass.data[DOMAIN]["_sicu_action_texts_added"]:
         sicu_strings = await async_get_translated_strings(hass, "sicu_entities")
         async_add_entities([
@@ -527,7 +526,7 @@ class DomoSicuActionText(TextEntity):
     _attr_should_poll = False
     _attr_mode = TextMode.TEXT
     _attr_native_min = 0
-    _attr_native_max = 23
+    _attr_native_max = 40
 
     _TARGET_STATUS = {
         "silence": {3072, 11264},
@@ -536,6 +535,11 @@ class DomoSicuActionText(TextEntity):
 
     _SEND_REQUIRES = {
         "silence": {3328, 11520},
+    }
+
+    _NOTHING_TO_DO_MESSAGE = {
+        "silence": ("action_feedback.no_alarm", "No alarm to silence"),
+        "reset_event_memory": ("action_feedback.no_events", "No events in memory"),
     }
 
     def __init__(self, entry_id: str, action: str, name: str, icon: str):
@@ -551,6 +555,13 @@ class DomoSicuActionText(TextEntity):
         )
         self._pending_display: str | None = None
         self._attempt_token: int = 0
+
+    @property
+    def mode(self) -> TextMode:
+        """Hidden (password) while waiting for the code, readable while a message is shown."""
+        if self._pending_display:
+            return TextMode.TEXT
+        return TextMode.PASSWORD
 
     @property
     def native_value(self) -> str:
@@ -570,20 +581,33 @@ class DomoSicuActionText(TextEntity):
 
         initial_status = device.state.get("status")
 
-        required = self._SEND_REQUIRES.get(self._action)
-        if required is not None and initial_status not in required:
+        # 1) Nothing to do: say so, without looking at the code and without sending anything.
+        if self._has_nothing_to_do(initial_status):
             _LOGGER.debug(
-                "SICU ACTION %s: precondition not met (status=%s), command not sent",
+                "SICU ACTION %s: nothing to do (status=%s), command not sent",
                 self._action, initial_status,
             )
-            self._pending_display = strings.get("action_feedback.no_action", "No action performed")
-            self.async_write_ha_state()
-            await asyncio.sleep(2)
-            if my_token == self._attempt_token:
-                self._pending_display = None
-                self.async_write_ha_state()
+            key, fallback = self._NOTHING_TO_DO_MESSAGE[self._action]
+            self._show_transient_message(strings.get(key, fallback), my_token)
             return
 
+        wrong_code = strings.get("input_bypass.wrong_code", "Wrong code")
+        if not (code.isdigit() and len(code) == SICU_CODE_LENGTH):
+            self._show_transient_message(wrong_code, my_token)
+            return
+
+        try:
+            code_ok = await device.verify_code(code)
+        except Exception as err:
+            self._show_transient_message(strings.get("action_feedback.error", "Error"), my_token)
+            raise HomeAssistantError(
+                f"Error verifying code for SICU ACTION {self._action}: {err}"
+            ) from err
+        if not code_ok:
+            self._show_transient_message(wrong_code, my_token)
+            return
+
+        # 2) Send the command and wait for the central to confirm.
         try:
             if self._action == "silence":
                 await device.silence(code)
@@ -593,29 +617,29 @@ class DomoSicuActionText(TextEntity):
             self._show_transient_message(strings.get("action_feedback.error", "Error"), my_token)
             raise HomeAssistantError(f"Error in SICU ACTION {self._action}: {err}") from err
 
-        if initial_status in self._TARGET_STATUS.get(self._action, set()):
-            _LOGGER.info(
-                "SICU ACTION %s: central already idle (status=%s), no action needed",
-                self._action, initial_status,
-            )
-            self._pending_display = strings.get("action_feedback.no_action", "No action performed")
+        confirmed = await self._wait_for_confirmation(device, initial_status)
+        if confirmed:
+            _LOGGER.info("SICU ACTION %s confirmed by central unit", self._action)
+            self._pending_display = strings.get("action_feedback.done", "done")
         else:
-            confirmed = await self._wait_for_confirmation(device, initial_status)
-            if confirmed:
-                _LOGGER.info("SICU ACTION %s confirmed by central unit", self._action)
-                self._pending_display = strings.get("action_feedback.done", "done")
-            else:
-                _LOGGER.warning(
-                    "SICU ACTION %s NOT confirmed within timeout (current status=%s)",
-                    self._action, device.state.get("status"),
-                )
-                self._pending_display = strings.get("action_feedback.error", "Error")
+            _LOGGER.warning(
+                "SICU ACTION %s NOT confirmed within timeout (current status=%s)",
+                self._action, device.state.get("status"),
+            )
+            self._pending_display = strings.get("action_feedback.error", "Error")
         self.async_write_ha_state()
 
         await asyncio.sleep(2)
         if my_token == self._attempt_token:
             self._pending_display = None
             self.async_write_ha_state()
+
+    def _has_nothing_to_do(self, status) -> bool:
+        """True if there is no alarm to silence / no event memory to clear."""
+        required = self._SEND_REQUIRES.get(self._action)
+        if required is not None:
+            return status not in required
+        return status in self._TARGET_STATUS.get(self._action, set())
 
     async def _wait_for_confirmation(self, device, initial_status, timeout: float = 2.0) -> bool:
         """Polls until the central unit's status reaches one of the expected values
@@ -687,6 +711,13 @@ class DomoSicuInputBypassCodeText(TextEntity):
         self._pending_display: str | None = None
         self._attempt_token: int = 0
         self._i18n: dict = {}
+
+    @property
+    def mode(self) -> TextMode:
+        """Hidden (password) while waiting for the code, readable while a message is shown."""
+        if self._pending_display:
+            return TextMode.TEXT
+        return TextMode.PASSWORD
 
     @property
     def native_value(self) -> str:

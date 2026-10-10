@@ -67,6 +67,9 @@
     },
     "action_feedback": {
       "no_action": "Действие не выполнено",
+      "no_alarm": "Нет тревоги для отключения",
+      "no_events": "Нет событий в памяти",
+      "enter_code": "Введите код",
       "done": "выполнено",
       "error": "Ошибка"
     }
@@ -169,6 +172,18 @@
     "action_feedback": {
       "pending": "Пожалуйста, подождите...",
       "send_error": "Ошибка отправки команды: {err}"
+    }
+  },
+  "lights_entities": {
+    "entity_names": {
+      "slider_profile": "Профиль ползунка"
+    },
+    "slider_profile_options": {
+      "intensity": "Интенсивность",
+      "intensity_saturation": "Интенсивность + насыщенность"
+    },
+    "errors": {
+      "invalid_option": "Недопустимый вариант: {option}"
     }
   },
   "irrigation_entities": {

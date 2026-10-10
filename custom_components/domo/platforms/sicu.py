@@ -146,7 +146,10 @@ async def discover_security(gateway):
     global _SECURITY_DEVICE
 
     if _SECURITY_DEVICE is not None:
-        return _SECURITY_DEVICE
+        if _SECURITY_DEVICE._gateway is gateway:
+            return _SECURITY_DEVICE
+        _SECURITY_DEVICE = None
+
 
     _LOGGER.info("SECURITY starting central discovery")
 
@@ -774,6 +777,29 @@ class SecurityCentral:
             self.start_input_bypass_window(code)
             return True
 
+    async def verify_code(self, code: str) -> bool:
+        """Check `code` against the central with the same harmless no-op probe used by
+        the input bypass, without opening the bypass window and without showing any
+        feedback in the bypass code field. Returns False only if the central rejects
+        the code; if it cannot be checked (no gateway, no probe input, no answer from
+        the central) it returns True and the caller relies on the later status change.
+        """
+        if not self._gateway:
+            return True
+
+        async with self._bypass_lock:
+            probe_id = self._get_bypass_probe_input_id()
+            if probe_id is None:
+                return True
+
+            try:
+                await self._send_bypass_wire_command(
+                    code, [probe_id], False, report_feedback=False
+                )
+            except ValueError:
+                return False
+            return True
+
     def _get_bypass_probe_input_id(self) -> int | None:
         """Return the id of an already-included input, safe to use as a no-op code probe."""
         for input_id in self._inputs_state:
@@ -818,7 +844,9 @@ class SecurityCentral:
         await self._send_bypass_wire_command(self._bypass_code, input_ids, exclude)
         self._extend_input_bypass_window()
 
-    async def _send_bypass_wire_command(self, code: str, input_ids: list[int], exclude: bool) -> None:
+    async def _send_bypass_wire_command(
+        self, code: str, input_ids: list[int], exclude: bool, report_feedback: bool = True
+    ) -> None:
         """Send sicu_multi_input_set_req and raise ValueError if the central rejects it."""
         payload = {
             "cmd_name": "sicu_multi_input_set_req",
@@ -850,7 +878,8 @@ class SecurityCentral:
                 "SECURITY input bypass rejected by central | input_ids=%s ack_type=%s",
                 input_ids, ack.get("ack_type"),
             )
-            self._report_bypass_feedback("wrong_code")
+            if report_feedback:
+                self._report_bypass_feedback("wrong_code")
             raise InputBypassDenied("wrong_code", "Input bypass command rejected by central unit")
 
     # --- Snapshot ---

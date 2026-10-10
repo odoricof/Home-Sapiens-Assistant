@@ -2,6 +2,7 @@
 domo/select.py
 
 Entities fed by:
+- platforms/lights.py
 - platforms/loadsctrl.py
 - platforms/thermoregulation.py
 
@@ -24,8 +25,16 @@ from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITY, SIGNAL_DISCOVERY_NEW
+from .platforms.lights import (
+    SLIDER_PROFILES,
+    DEFAULT_SLIDER_PROFILE,
+    DomoLight,
+    get_all_lights,
+    rgb_light_device_info,
+)
 from .platforms.loadsctrl import (
     DomoLoadCtrlMeter,
     LOADCTRL_DAY_TO_INDEX,
@@ -68,6 +77,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     thermostats = get_all_thermostats()
     loadsctrl_meters = get_all_loadsctrl_meters()
+    rgb_lights = [light for light in get_all_lights() if light.light_type == "rgb"]
 
     entities = []
 
@@ -95,15 +105,21 @@ async def async_setup_entry(hass, entry, async_add_entities):
         DomoLoadCtrlProfileDaySelect(meter) for meter in loadsctrl_meters
     )
 
+    # --- RGB lights (slider profile) ---
+    if rgb_lights:
+        entities.extend(
+            DomoLightSliderProfileSelect(hass, light, entry) for light in rgb_lights
+        )
+
     if not entities:
-        _LOGGER.debug("No thermostat or load control manager found, skipping select setup")
+        _LOGGER.debug("No thermostat, load control manager or RGB light found, skipping select setup")
         return
 
     async_add_entities(entities)
 
     _LOGGER.info(
-        "Added %d select entities (%d thermostats, %d load control managers)",
-        len(entities), len(thermostats), len(loadsctrl_meters),
+        "Added %d select entities (%d thermostats, %d load control managers, %d RGB lights)",
+        len(entities), len(thermostats), len(loadsctrl_meters), len(rgb_lights),
     )
 
     loadsctrl_added_ids: set[int] = set()
@@ -572,3 +588,84 @@ class DomoLoadCtrlProfileDaySelect(SelectEntity):
     def _handle_update(self, entity_id: str = None):
         if entity_id is None or entity_id == self._meter.unique_id:
             self.async_write_ha_state()
+
+
+# ============================================================
+# ===== RGB LIGHTS (SLIDER PROFILE) =====
+# ============================================================
+
+# English fallbacks, used when the translation section is missing.
+_SLIDER_PROFILE_DEFAULT_LABELS = {
+    "intensity": "Intensity",
+    "intensity_saturation": "Intensity + saturation",
+}
+
+
+class DomoLightSliderProfileSelect(SelectEntity, RestoreEntity):
+    """How the brightness slider of an RGB light behaves.
+
+    - intensity: the slider changes only the brightness of the chosen color
+    - intensity + saturation: the slider goes black -> color -> white,
+      like the official CAME app
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:palette"
+
+    def __init__(self, hass, light: DomoLight, entry):
+        self._light = light
+        self._i18n: dict[str, str] = {}
+        self._attr_unique_id = f"{light.unique_id}_slider_profile"
+        self._attr_device_info = rgb_light_device_info(hass, entry, light)
+
+    def _label(self, key: str) -> str:
+        return self._i18n.get(
+            f"slider_profile_options.{key}",
+            _SLIDER_PROFILE_DEFAULT_LABELS.get(key, key),
+        )
+
+    @property
+    def name(self) -> str:
+        return self._i18n.get("entity_names.slider_profile", "Slider profile")
+
+    @property
+    def options(self) -> list[str]:
+        return [self._label(key) for key in SLIDER_PROFILES]
+
+    @property
+    def current_option(self) -> str | None:
+        return self._label(self._light.slider_profile)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        """Stable (untranslated) key, used to restore the choice after a restart."""
+        return {"profile": self._light.slider_profile}
+
+    async def async_select_option(self, option: str) -> None:
+        reverse = {self._label(key): key for key in SLIDER_PROFILES}
+        profile = reverse.get(option)
+        if profile is None:
+            raise HomeAssistantError(
+                self._i18n.get("errors.invalid_option", "Invalid option: {option}").format(option=option)
+            )
+        self._light.set_slider_profile(profile)
+        self.async_write_ha_state()
+        # Let the light entity re-read the bus and redraw its slider/wheel
+        async_dispatcher_send(self.hass, SIGNAL_UPDATE_ENTITY, self._light.unique_id)
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+
+        try:
+            self._i18n = await async_get_translated_strings(self.hass, "lights_entities")
+        except Exception as err:  # noqa: BLE001 - missing translations must never block setup
+            _LOGGER.debug("lights_entities translations not available: %s", err)
+            self._i18n = {}
+
+        last_state = await self.async_get_last_state()
+        profile = (last_state.attributes.get("profile") if last_state else None) or DEFAULT_SLIDER_PROFILE
+        if profile in SLIDER_PROFILES:
+            self._light.set_slider_profile(profile)
+            async_dispatcher_send(self.hass, SIGNAL_UPDATE_ENTITY, self._light.unique_id)

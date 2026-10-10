@@ -166,7 +166,10 @@ class DomoTimer:
 async def discover_timers(gateway) -> list[DomoTimer]:
     """Try to discover existing timers with a list request."""
     _LOGGER.debug("SCHEDULER timer discovery (best-effort)")
-
+    
+    for cached in _TIMERS.values():
+        cached._gateway = gateway
+        
     try:
         resp = await gateway.tx_command(
             {"cmd_name": "timers_list_req"}, resp_command=None

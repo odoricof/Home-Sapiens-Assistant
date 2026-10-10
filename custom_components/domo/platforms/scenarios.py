@@ -111,9 +111,9 @@ class DomoScenarioDevice:
     def set_target(self, scenario_id: int | None) -> None:
         self._target_id = scenario_id
 
-    async def available_scenarios(self) -> list[dict[str, Any]]:
-        """Return the list of available scenarios."""
-        return await self._get_scenarios()
+    async def available_scenarios(self) -> list[dict[str, Any]] | None:
+        """Return the list of available scenarios, or None if the gateway did not answer."""
+        return await self._fetch_scenarios()
 
     async def activate_scenario(self, scenario_id: int) -> bool:
         """Activate an existing scenario."""
@@ -389,14 +389,22 @@ class DomoScenarioDevice:
             self._pending_action_event.set()
 
     async def _get_scenarios(self) -> list[dict[str, Any]]:
-        """Fetch the scenarios list from the gateway and refresh the cache."""
+        """Fetch the scenarios list; an empty list if the gateway did not answer."""
+        scenarios = await self._fetch_scenarios()
+        return scenarios if scenarios is not None else []
+
+    async def _fetch_scenarios(self) -> list[dict[str, Any]] | None:
+        """Fetch the scenarios list from the gateway and refresh the cache.
+
+        Returns None (and keeps the old cache) if the gateway did not answer.
+        """
         resp = await self._gateway.tx_command({
             "cmd_name": "scenarios_list_req"
         }, resp_command="scenarios_list_resp")
 
         if not resp:
             _LOGGER.error("No response from gateway for scenarios list")
-            return []
+            return None
 
         scenarios = resp.get("array", [])
         _LOGGER.debug("Retrieved %d scenarios", len(scenarios))

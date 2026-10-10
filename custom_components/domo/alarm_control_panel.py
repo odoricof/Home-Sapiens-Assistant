@@ -48,7 +48,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     """Setup alarm control panel platform."""
     _LOGGER.debug("Setting up alarm_control_panel platform (SECURITY)")
 
-    hass.data[DOMAIN].setdefault("_security_panel_added", False)
+    hass.data[DOMAIN]["_security_panel_added"] = False
 
     security = get_security_device()
     if security and not hass.data[DOMAIN]["_security_panel_added"]:

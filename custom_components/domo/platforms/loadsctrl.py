@@ -494,6 +494,7 @@ async def discover_loadsctrl(gateway):
             continue
         meter = _LOADCTRL_METERS.get(item["id"])
         if meter:
+            meter._gateway = gateway
             meter.update(item)
         else:
             meter = DomoLoadCtrlMeter(gateway, item)

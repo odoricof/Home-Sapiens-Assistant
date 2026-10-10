@@ -32,10 +32,21 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.util.color import color_hsv_to_RGB, color_RGB_to_hsv
 
 from .const import DOMAIN, SIGNAL_UPDATE_ENTITY
-from .platforms.lights import DomoLight, get_all_lights
+from .platforms.lights import (
+    SLIDER_PROFILE_INTENSITY_SATURATION,
+    HUE_MIN_SATURATION,
+    DomoLight,
+    get_all_lights,
+    rgb_light_device_info,
+    rgb_to_slider,
+    slider_to_hsv,
+)
 
 
 _LOGGER = logging.getLogger(__name__)
+
+# A point of the color wheel with at least this saturation (%) is on the outer edge.
+_WHEEL_EDGE_SATURATION = 99.0
 
 
 # ============================================================
@@ -74,19 +85,28 @@ class DomoLightEntity(LightEntity):
         self._last_dimmer_value = 100
 
         self._hsv = (0.0, 0.0, 0.0)
+        # Used only by the "intensity + saturation" profile
+        self._hue = 0.0
+        self._slider = 0.0
 
         if light.light_type == "rgb" and light.rgb_color:
             r, g, b = light.rgb_color
             h, s, v = color_RGB_to_hsv(r, g, b)
             self._hsv = (h, s, v)
+            self._slider = rgb_to_slider(r, g, b)
+            if s >= HUE_MIN_SATURATION:
+                self._hue = h
             _LOGGER.debug("Initialized HSV from RGB %s: %s", light.rgb_color, self._hsv)
 
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry.entry_id}_lights")},
-            name="Lights",
-            manufacturer="Home Sapiens Assistant",
-            model="Eti/Domo",
-        )
+        if light.light_type == "rgb":
+            self._attr_device_info = rgb_light_device_info(hass, entry, light)
+        else:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"{entry.entry_id}_lights")},
+                name="Lights",
+                manufacturer="Home Sapiens Assistant",
+                model="Eti/Domo",
+            )
 
         self._attr_suggested_area = light.room
 
@@ -107,6 +127,14 @@ class DomoLightEntity(LightEntity):
         _LOGGER.debug("Created light entity: %s", self._attr_name)
 
     @property
+    def _alt_profile(self) -> bool:
+        """Return True if this RGB light follows the "intensity + saturation" profile."""
+        return (
+            self._light.light_type == "rgb"
+            and self._light.slider_profile == SLIDER_PROFILE_INTENSITY_SATURATION
+        )
+
+    @property
     def is_on(self) -> bool:
         """Return True if the light is on."""
         return self._light.is_on
@@ -117,6 +145,8 @@ class DomoLightEntity(LightEntity):
         if self._light.light_type == "DIMMER":
             return int(self._light.brightness * 2.55)
         if self._light.light_type == "rgb":
+            if self._alt_profile:
+                return round(self._slider / 100.0 * 255)
             return int(self._hsv[2] * 2.55)
         return None
 
@@ -124,6 +154,9 @@ class DomoLightEntity(LightEntity):
     def hs_color(self) -> tuple[float, float] | None:
         """Return the HS color value."""
         if self._light.light_type == "rgb":
+            if self._alt_profile:
+                h, s, _ = slider_to_hsv(self._hue, self._slider)
+                return (h, s)
             return (self._hsv[0], self._hsv[1])
         return None
 
@@ -131,7 +164,10 @@ class DomoLightEntity(LightEntity):
     def rgb_color(self) -> tuple[int, int, int] | None:
         """Convert HSV to RGB for compatibility."""
         if self._light.light_type == "rgb":
-            h, s, v = self._hsv
+            if self._alt_profile:
+                h, s, v = slider_to_hsv(self._hue, self._slider)
+            else:
+                h, s, v = self._hsv
             return color_hsv_to_RGB(h, s, v)
         return None
 
@@ -140,7 +176,43 @@ class DomoLightEntity(LightEntity):
         brightness = None
         rgb = None
 
-        if self._light.light_type == "rgb":
+        if self._alt_profile and ATTR_HS_COLOR not in kwargs and ATTR_BRIGHTNESS not in kwargs:
+            # Plain ON: no color is sent, ETI Domo applies its own default
+            # and the new color is read back from the bus.
+            _LOGGER.debug("Intensity+saturation profile: plain ON, color left to ETI Domo")
+
+        elif self._alt_profile:
+            # Slider = position on the black -> color -> white path.
+            # A point chosen on the color wheel stays where it is and the slider
+            # follows it, like in the official app.
+            if ATTR_HS_COLOR in kwargs:
+                hue, sat = kwargs[ATTR_HS_COLOR]
+            else:
+                hue, sat = self._hue, None
+
+            if ATTR_BRIGHTNESS in kwargs:
+                slider = kwargs[ATTR_BRIGHTNESS] / 255.0 * 100
+            else:
+                slider = self._slider
+
+            if sat is not None:
+                if sat >= _WHEEL_EDGE_SATURATION:
+                    # Outer edge: only the first half of the slider exists here
+                    slider = min(slider, 50.0)
+                else:
+                    # Inside the wheel: the distance from the edge sets the slider
+                    slider = 50.0 + (100.0 - sat) / 2.0
+
+            self._hue = hue
+            self._slider = slider
+            self._hsv = slider_to_hsv(hue, slider)
+            rgb = color_hsv_to_RGB(*self._hsv)
+            _LOGGER.debug(
+                "Intensity+saturation profile from UI: hue=%f, slider=%f -> HSV=%s",
+                hue, slider, self._hsv,
+            )
+
+        elif self._light.light_type == "rgb":
 
             if ATTR_HS_COLOR in kwargs:
                 h, s = kwargs[ATTR_HS_COLOR]
@@ -213,7 +285,7 @@ class DomoLightEntity(LightEntity):
             )
             return False
 
-        if self._light.light_type == "rgb":
+        if self._light.light_type == "rgb" and self._expected_state["rgb"] is not None:
             if self._expected_state["rgb"] != self._light.rgb_color:
                 _LOGGER.debug(
                     "MISMATCH rgb: expected=%s, actual=%s",
@@ -254,20 +326,26 @@ class DomoLightEntity(LightEntity):
 
                 if self._state_matches_expected():
                     self._awaiting_confirmation = False
-                    self.async_write_ha_state()
-                    return
+                    if self._light.light_type != "rgb" or self._expected_state["rgb"] is not None:
+                        self.async_write_ha_state()
+                        return
+                    # Plain ON: ETI Domo chose the color, read it from the bus below
 
-                if now - self._command_ts >= 0.5:
+                elif now - self._command_ts >= 0.5:
                     self._awaiting_confirmation = False
                     self.async_write_ha_state()
                     return
 
-                return
+                else:
+                    return
 
             if self._light.light_type == "rgb" and self._light.rgb_color:
                 r, g, b = self._light.rgb_color
                 h, s, v = color_RGB_to_hsv(r, g, b)
                 self._hsv = (h, s, v)
+                self._slider = rgb_to_slider(r, g, b)
+                if s >= HUE_MIN_SATURATION:
+                    self._hue = h
                 _LOGGER.debug("BUS UPDATE: RGB=%s -> HSV=(%f, %f, %f)", (r, g, b), h, s, v)
 
             elif self._light.light_type == "DIMMER" and self._light.brightness and self._light.brightness > 0:

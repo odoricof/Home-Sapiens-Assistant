@@ -67,6 +67,9 @@
     },
     "action_feedback": {
       "no_action": "Keine Aktion ausgeführt",
+      "no_alarm": "Kein Alarm zum Stummschalten",
+      "no_events": "Keine Ereignisse im Speicher",
+      "enter_code": "Code eingeben",
       "done": "erledigt",
       "error": "Fehler"
     }
@@ -169,6 +172,18 @@
     "action_feedback": {
       "pending": "Bitte warten...",
       "send_error": "Fehler beim Senden des Befehls: {err}"
+    }
+  },
+  "lights_entities": {
+    "entity_names": {
+      "slider_profile": "Slider-Profil"
+    },
+    "slider_profile_options": {
+      "intensity": "Intensität",
+      "intensity_saturation": "Intensität + Sättigung"
+    },
+    "errors": {
+      "invalid_option": "Ungültige Option: {option}"
     }
   },
   "irrigation_entities": {

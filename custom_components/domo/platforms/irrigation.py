@@ -321,6 +321,7 @@ async def discover_irrigation_zones(gateway):
             continue
         zone = _IRRIGATION_ZONES.get(item["id"])
         if zone:
+            zone._gateway = gateway
             zone.update(item)
         else:
             zone = DomoIrrigationZone(gateway, item)

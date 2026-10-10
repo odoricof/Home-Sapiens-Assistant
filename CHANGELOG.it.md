@@ -10,6 +10,30 @@
 ---
 # CHANGELOG:
 
+# [2.2.0] - 2026-10-04
+
+### 🚀 Features
+
+#### Lights - Comportamento slider luminosità RGB
+
+- Ogni luce RGB è ora un dispositivo a sé, figlio del dispositivo "Lights", e contiene la luce e un nuovo selettore **Profilo colore**. Gli `entity_id` e lo storico delle luci non cambiano.
+- Il selettore permette di scegliere come si comporta lo slider della luce:
+  - **Intensità** (predefinito): lo slider regola solo la luminosità del colore scelto, come nelle versioni precedenti.
+  - **Intensità + saturazione**: replica il comportamento dell'app ufficiale. Nella prima metà della corsa lo slider porta la luce da nero al colore pieno, nella seconda metà dal colore pieno al bianco.
+  
+### ✨ Improvements
+
+- I campi codice della centrale ora nascondono le cifre digitate, ma continuano a mostrare i messaggi in chiaro.
+- Silenzia sirene / Reset memoria eventi: se non c'è nulla da fare, ora il campo scrive "Nessun allarme da silenziare" o "Nessun evento in memoria".
+- Silenzia sirene / Reset memoria eventi: un codice errato viene segnalato subito con "Codice errato".
+
+### 🐛 bug Fixes
+
+#### Reload - Entità e comandi non funzionanti dopo il reload dell'integrazione (#6)
+
+- Dopo il reload della config entry, le entità `scene.*` degli scenari, il pannello allarme e le entità di testo della centrale (silenziamento sirena, azzeramento memoria eventi, codice di esclusione ingressi) vengono ora ricreate correttamente e restano disponibili, quindi funzionano di nuovo senza riavviare Home Assistant.
+- I comandi di irrigazione, carico energetico e timer non danno più errore dopo il reload dell'integrazione.
+  
 ## [2.1.0] - 2026-10-03
 
 ### 🚀 Features
@@ -20,7 +44,7 @@
 
 ![loads](images/bypass.png)
 
-### ✨ Miglioramenti
+### ✨ Improvements
 
 #### Climate - Inserimento più rapido del profilo termico
 

@@ -10,6 +10,30 @@
 ---
 # CHANGELOG:
 
+## [2.2.0] - 2026-10-04
+
+### 🚀 Features
+
+#### Lights - RGB brightness slider behavior
+
+- Each RGB light is now its own device, a child of the "Lights" device, and contains the light and a new **Color profile** select. Light `entity_id`s and history are unchanged.
+- The select lets you choose how the light's slider behaves:
+  - **Intensity** (default): the slider only adjusts the brightness of the chosen color, as in previous versions.
+  - **Intensity + saturation**: replicates the behavior of the official app. In the first half of the travel the slider goes from black to the full color, in the second half from the full color to white.
+ 
+### ✨ Improvements
+
+- Security code fields now hide the digits you type, while still showing readable messages.
+- Silence sirens / Reset event memory: if there is nothing to do, the field says "No alarm to silence" or "No events in memory".
+- Silence sirens / Reset event memory: a wrong code is now reported right away with "Wrong code".
+ 
+### 🐛 Bug Fixes
+
+#### Reload - Entities and commands broken after reloading the integration (#6)
+
+- After reloading the config entry, the scenario `scene.*` entities, the alarm panel and the alarm control unit text entities (siren silence, event memory reset, input bypass code) are now re-created correctly and stay available, so they work again without restarting Home Assistant.
+- Irrigation, load control and timer commands no longer fail with errors after reloading the integration.
+
 ## [2.1.0] - 2026-10-03
 
 ### 🚀 Features

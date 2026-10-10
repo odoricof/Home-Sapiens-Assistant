@@ -44,10 +44,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         _LOGGER.error("No scenario device found")
         return
 
-    if "domo_scenarios" not in hass.data[DOMAIN]:
-        hass.data[DOMAIN]["domo_scenarios"] = {}
-
-    existing_entities = hass.data[DOMAIN]["domo_scenarios"]
+    existing_entities: dict[int, DomoScenarioEntity] = {}
+    hass.data[DOMAIN]["domo_scenarios"] = existing_entities
 
     def create_new_entities(scenario_list: list[dict[str, Any]], entry_id: str) -> list["DomoScenarioEntity"]:
         """Create new entities for scenarios not yet registered."""
@@ -76,6 +74,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
 
     # --- Initial scenarios ---
     initial_scenarios = await scenario_device.available_scenarios()
+    if initial_scenarios is None:
+        _LOGGER.warning(
+            "Gateway did not answer the scenarios list; "
+            "scenes will be created at the next refresh"
+        )
+        initial_scenarios = []
     _LOGGER.debug("Initial setup: loaded %d scenarios", len(initial_scenarios))
 
     new_entities = create_new_entities(initial_scenarios, config_entry.entry_id)
@@ -87,6 +91,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         _LOGGER.debug("Received scenario refresh event")
 
         updated_scenarios = await scenario_device.available_scenarios()
+
+        if updated_scenarios is None:
+            _LOGGER.warning(
+                "Scenario refresh skipped: gateway did not answer, "
+                "existing scenes are left untouched"
+            )
+            return
 
         existing_ids = set(existing_entities.keys())
         current_ids = set(s["id"] for s in updated_scenarios if s.get("id") is not None)
@@ -136,7 +147,9 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     async def _dispatcher_handler():
         hass.async_create_task(handle_refresh_scenarios())
 
-    async_dispatcher_connect(hass, "domo_scenarios_refreshed", _dispatcher_handler)
+    config_entry.async_on_unload(
+        async_dispatcher_connect(hass, "domo_scenarios_refreshed", _dispatcher_handler)
+    )
 
 
 # ============================================================

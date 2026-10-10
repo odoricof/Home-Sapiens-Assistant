@@ -62,11 +62,13 @@ Attualmente supportati:
    - Notifiche di trigger e allarmi
    - Silenziamento sirene
    - Cancellazione memoria eventi
+   - Esclusione ingressi
    
 - Luci
    - On/Off
    - Dimmers
    - RGB
+     - Slider: luminosità / luminosità+saturazione
    
 - Controllo carichi
    - Replica integrale di tutte le funzioni esposte in lettura e scrittura
