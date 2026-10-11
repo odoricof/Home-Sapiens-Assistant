@@ -23,9 +23,9 @@
  
 ### ✨ Improvements
 
-- Security code fields now hide the digits you type, while still showing readable messages.
-- Silence sirens / Reset event memory: if there is nothing to do, the field says "No alarm to silence" or "No events in memory".
-- Silence sirens / Reset event memory: a wrong code is now reported right away with "Wrong code".
+- SICU code fields now hide the digits you type, while still showing readable messages.
+- Silence sirens / Reset event memory: if there is nothing to do, the field says "No alarm to silence" or "No events in memory", whatever the code typed.
+- Silence sirens / Reset event memory: when there is an alarm to silence or events to clear, a wrong code is now reported right away with "Wrong code".
  
 ### 🐛 Bug Fixes
 

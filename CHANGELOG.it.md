@@ -24,8 +24,8 @@
 ### ✨ Improvements
 
 - I campi codice della centrale ora nascondono le cifre digitate, ma continuano a mostrare i messaggi in chiaro.
-- Silenzia sirene / Reset memoria eventi: se non c'è nulla da fare, ora il campo scrive "Nessun allarme da silenziare" o "Nessun evento in memoria".
-- Silenzia sirene / Reset memoria eventi: un codice errato viene segnalato subito con "Codice errato".
+- Silenzia sirene / Reset memoria eventi: se non c'è nulla da fare, il campo scrive "Nessun allarme da silenziare" o "Nessun evento in memoria", qualunque sia il codice digitato.
+- Silenzia sirene / Reset memoria eventi: quando c'è un allarme da silenziare o ci sono eventi da cancellare, un codice errato viene segnalato subito con "Codice errato".
 
 ### 🐛 bug Fixes
 
