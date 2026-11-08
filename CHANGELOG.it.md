@@ -10,6 +10,22 @@
 ---
 # CHANGELOG:
 
+## [2.2.1] - 2026-11-08
+
+### ✨ Improvements
+
+#### Registro - Cambi di stato comunicati da ETI/Domo
+
+- I cambi di stato che arrivano da ETI/Domo senza una richiesta di Home Assistant (pulsanti fisici, app ufficiale, scenari) ora hanno una causa nel registro e nell'attività dell'entità: in "Cosa è successo" compare il logo di Home Sapiens Assistant con l'azione `domo.external_action`, invece di "Non è stata registrata alcuna causa".
+
+![logbook](images/logbook.png)
+
+### 🐛 Bug Fixes
+
+#### Pannello allarme - Falso stato "disattivo" al termine del tempo di uscita
+
+- Corretto un breve falso stato "disattivo" mostrato dal pannello allarme subito dopo il tempo di uscita, un attimo prima di passare allo stato inserito. La centrale comunica la fine dell'inserimento una frazione di secondo prima che le aree aggiornino il proprio stato, e in quell'istante il pannello sembrava disattivo. Ora il pannello resta in "inserimento" finché le aree non sono davvero inserite.
+
 # [2.2.0] - 2026-10-04
 
 ### 🚀 Features
@@ -27,7 +43,7 @@
 - Silenzia sirene / Reset memoria eventi: se non c'è nulla da fare, il campo scrive "Nessun allarme da silenziare" o "Nessun evento in memoria", qualunque sia il codice digitato.
 - Silenzia sirene / Reset memoria eventi: quando c'è un allarme da silenziare o ci sono eventi da cancellare, un codice errato viene segnalato subito con "Codice errato".
 
-### 🐛 bug Fixes
+### 🐛 Bug Fixes
 
 #### Reload - Entità e comandi non funzionanti dopo il reload dell'integrazione (#6)
 

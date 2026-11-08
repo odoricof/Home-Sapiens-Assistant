@@ -1,12 +1,14 @@
-[![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=plastic&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant)
+[![Marketplace](https://img.shields.io/badge/Marketplace-Default-41BDF5.svg?style=plastic&labelColor=555555&logo=homeassistant&logoColor=white)](https://github.com/odoricof/Home-Sapiens-Assistant)
 [![Current release](https://img.shields.io/github/release/odoricof/Home-Sapiens-Assistant.svg?style=plastic&label=Current%20release&labelColor=555555&color=41BDF5)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)  
 [![Validate with hassfest](https://img.shields.io/github/actions/workflow/status/odoricof/Home-Sapiens-Assistant/hassfest.yaml?style=plastic&label=hassfest&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant/actions/workflows/hassfest.yaml)
 [![Validate](https://img.shields.io/github/actions/workflow/status/odoricof/Home-Sapiens-Assistant/validate.yml?style=plastic&label=Validate&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant/actions/workflows/validate.yml)  
 [![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads&labelColor=555555&color=41BDF5)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
+---
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/dark_logo.png">
+  <img alt="Home Sapiens Assistant" src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo.png">
+</picture>
 
-<img src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo@2x.png" width="96" alt="">
-
-# Home Sapiens Assistant
 ---
 **Integrazione personalizzata multilingue** per **Home Assistant**, consente di interfacciarsi con **Bpt Home Automation / CAME Domotic 3.0 (sistemi basati su server ETI/DOMO)** tramite l'interfaccia web di Home Sapiens.
 
@@ -104,33 +106,32 @@ Non essendo fornita un'API diretta dal produttore, l'integrazione interagisce co
 
 ## Installazione
 
-### HACS (consigliato)
+### Marketplace (consigliato)
 
-1. Apri HACS in Home Assistant  
-2. Vai su **Integrazioni**  
-3. Cerca **Home Sapiens Assistant** e installa  
-4. Riavvia Home Assistant  
-
----
+- Vai su **Impostazioni → Marketplace** e cerca **Home Sapiens Assistant**, oppure usa questo link:  
+  [![Open your Home Assistant instance and open a repository inside the Home Assistant Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?repository=Home-Sapiens-Assistant&category=Integration&owner=odoricof)
+- Clicca su **Installa**, controlla la versione e conferma con **Installa** di nuovo.
+- Riavvia Home Assistant
 
 ### Installazione manuale
 
-1. Scarica questo repository  
-2. Copia la cartella: `custom_components/domo/` nella directory di Home Assistant
-3. Riavvia Home Assistant  
+- Scarica questo repository
+- Copia la cartella: custom_components/domo/
+- Riavvia Home Assistant  
 
 ---
 
 ## Configurazione
 
-Dopo l'installazione:
-
-1. Vai su **Impostazioni → Dispositivi e Servizi**
-2. Clicca **Aggiungi integrazione**
-3. Cerca **Home Sapiens Assistant**
-4. Inserisci:
-   - Indirizzo IP del server ETI/DOMO
-   - Credenziali di accesso alla pagina web di Home Sapiens
+- Clicca qui e conferma:  
+  [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=domo)
+- Oppure vai su **Impostazioni → Dispositivi e servizi** oppure clicca qui:  
+  [![Open your Home Assistant instance and show your integrations.](https://my.home-assistant.io/badges/integrations.svg)](https://my.home-assistant.io/redirect/integrations/)
+  - Clicca su **Aggiungi integrazione**
+  - Cerca **Home Sapiens Assistant**
+  - Inserisci:
+    - Indirizzo IP del server ETI/DOMO
+    - Credenziali di accesso alla pagina web di Home Sapiens
 
 ---
 

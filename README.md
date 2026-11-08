@@ -1,12 +1,14 @@
-[![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg?style=plastic&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant)
+[![Marketplace](https://img.shields.io/badge/Marketplace-Default-41BDF5.svg?style=plastic&labelColor=555555&logo=homeassistant&logoColor=white)](https://github.com/odoricof/Home-Sapiens-Assistant)
 [![Current release](https://img.shields.io/github/release/odoricof/Home-Sapiens-Assistant.svg?style=plastic&label=Current%20release&labelColor=555555&color=41BDF5)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)  
 [![Validate with hassfest](https://img.shields.io/github/actions/workflow/status/odoricof/Home-Sapiens-Assistant/hassfest.yaml?style=plastic&label=hassfest&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant/actions/workflows/hassfest.yaml)
 [![Validate](https://img.shields.io/github/actions/workflow/status/odoricof/Home-Sapiens-Assistant/validate.yml?style=plastic&label=Validate&labelColor=555555)](https://github.com/odoricof/Home-Sapiens-Assistant/actions/workflows/validate.yml)  
 [![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads&labelColor=555555&color=41BDF5)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
+---
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/dark_logo.png">
+  <img alt="Home Sapiens Assistant" src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo.png">
+</picture>
 
-<img src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo@2x.png" width="96" alt="">
-
-# Home Sapiens Assistant
 ---
 **Multilingual Custom integration** for **Home Assistant** to interface with **Bpt Home Automation / CAME Domotic 3.0 (Systems based of ETI/DOMO server)** through the Home Sapiens web interface.
 
@@ -101,36 +103,35 @@ The integration communicates with the system by reproducing the same HTTP reques
 No direct API is provided by the manufacturer; therefore, the integration interacts with the system through observed web communication.
 
 ---
-
 ## Installation
 
-### HACS (recommended)
+### Marketplace (recommended)
 
-1. Open HACS in Home Assistant  
-2. Go to **Integrations**  
-3. Search for **Home Sapiens Assistant** and install  
-4. Restart Home Assistant  
-
----
+- Go to **Settings → Marketplace** and search for **Home Sapiens Assistant**, or use this link:  
+  [![Open your Home Assistant instance and open a repository inside the Home Assistant Marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?repository=Home-Sapiens-Assistant&category=Integration&owner=odoricof)
+- Click **Install**, check the version and confirm with **Install** again.
+- Restart Home Assistant
 
 ### Manual installation
 
-1. Download this repository  
-2. Copy the folder: custom_components/domo/
-3. Restart Home Assistant  
+- Download this repository
+- Copy the folder: custom_components/domo/
+- Restart Home Assistant  
 
 ---
 
 ## Configuration
 
-After installation:
+- Simply click here and confirm:  
+  [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=domo)
+- Or else, go to **Settings → Devices & Services** or click here:  
+  [![Open your Home Assistant instance and show your integrations.](https://my.home-assistant.io/badges/integrations.svg)](https://my.home-assistant.io/redirect/integrations/)
+  - Click **Add Integration**
+  - Search for **Home Sapiens Assistant**
+  - Enter:
+    - IP address of the ETI/DOMO server
+    - Credentials of the Home Sapiens web page login
 
-1. Go to **Settings → Devices & Services**
-2. Click **Add Integration**
-3. Search for **Home Sapiens Assistant**
-4. Enter:
-   - IP address of ETI/DOMO server
-   - Credentials of Home Sapiens web page login
 
 ---
 ## Note on Scenario Visualization in the Home Assistant Alarm Panel

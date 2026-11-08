@@ -34,6 +34,7 @@ from .platforms.scheduler import discover_timers, handle_timer_status_update, re
 from .platforms.sicu import discover_security, handle_security_status_update, refresh_all_security
 from .platforms.thermoregulation import discover_thermostats, handle_thermostat_status_update, refresh_all_thermostats
 from .platforms.tvcc import discover_tvcc_cameras
+from .services.external_activity import async_setup_external_activity
 from .services.logger_security_events import SecurityEventsLogger
 from .services.notifications import async_register_notification_services
 
@@ -108,6 +109,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await discover_tvcc_cameras(gateway)
     await discover_irrigation_zones(gateway)
     await discover_loadsctrl(gateway)
+    
+    entry.async_on_unload(async_setup_external_activity(hass))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

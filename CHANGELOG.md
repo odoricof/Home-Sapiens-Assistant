@@ -10,6 +10,22 @@
 ---
 # CHANGELOG:
 
+## [2.2.1] - 2026-11-08
+
+### ✨ Improvements
+
+#### Logbook - State changes reported by ETI/Domo
+
+- State changes that come from the ETI/Domo without a Home Assistant request (physical buttons, official app, scenarios) now have a cause in the logbook and in the entity activity: the "What happened" section shows the Home Sapiens Assistant logo with the `domo.external_action` action, instead of "No cause was recorded".
+
+![logbook](images/logbook.png)
+
+### 🐛 Bug Fixes
+
+#### Alarm panel - Spurious "disarmed" state at the end of the exit time
+
+- Fixed a brief false "disarmed" state shown by the alarm panel right after the exit time, just before it switched to the armed state. The control panel reports that arming is complete a fraction of a second before the areas update their own status, and in that moment the panel looked disarmed. The panel now stays in "arming" until the areas are actually armed.
+
 ## [2.2.0] - 2026-10-04
 
 ### 🚀 Features

@@ -172,6 +172,9 @@ class DomoSecurityCentralEntity(AlarmControlPanelEntity):
 
         if central_status in (4096, 4352, 12288, 14336):
             return AlarmControlPanelState.ARMING
+            
+        if any(a.get("status") in (33, 41, 49, 57, 97, 105, 113, 121) for a in areas):
+            return AlarmControlPanelState.ARMING            
 
         armed_now = {
             a.get("area_id")
