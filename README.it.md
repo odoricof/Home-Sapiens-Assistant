@@ -5,8 +5,8 @@
 [![downloads](https://img.shields.io/github/downloads/odoricof/Home-Sapiens-Assistant/total?style=plastic&label=Total%20downloads&labelColor=555555&color=41BDF5)](https://github.com/odoricof/Home-Sapiens-Assistant/releases)
 ---
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/dark_logo@2x.png">
-  <img alt="Home Sapiens Assistant" src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo@2x.png">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/dark_logo.png">
+  <img alt="Home Sapiens Assistant" src="https://raw.githubusercontent.com/odoricof/Home-Sapiens-Assistant/main/custom_components/domo/brand/logo.png">
 </picture>
 
 ---
