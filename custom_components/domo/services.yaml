@@ -1,0 +1,15 @@
+set_thermal_profile:
+  target:
+    entity:
+      integration: domo
+      domain: climate
+  fields:
+    day:
+      required: true
+      selector:
+        text:
+    profile:
+      required: true
+      example: "111111111111111111111111111133333333222222222222222222222222222222223333333333331111111111111111"
+      selector:
+        text:
