@@ -19,6 +19,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import voluptuous as vol
+
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityFeature,
@@ -30,7 +32,10 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import DeviceInfo
 
@@ -39,6 +44,8 @@ from .platforms.thermoregulation import (
     current_weekday_name,
     DomoThermostat,
     get_all_thermostats,
+    PROFILE_DAY_TO_ID,
+    PROFILE_ID_TO_DAY,
 )
 from .services.i18n import async_get_translated_strings
 
@@ -47,6 +54,8 @@ _LOGGER = logging.getLogger(__name__)
 
 FAN_MODES = ["auto", "low", "medium", "high"]
 PRESET_JOLLY = "Jolly"
+
+SERVICE_SET_THERMAL_PROFILE = "set_thermal_profile"
 
 
 # ============================================================
@@ -60,6 +69,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
     if not thermostats:
         _LOGGER.debug("No thermostats found yet")
         return
+
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        SERVICE_SET_THERMAL_PROFILE,
+        {
+            vol.Required("day"): vol.In(list(PROFILE_DAY_TO_ID)),
+            vol.Required("profile"): vol.All(cv.string, vol.Match(r"^[1-5]{96}$")),
+        },
+        "async_set_thermal_profile",
+    )
 
     entities = []
     for thermostat in thermostats:
@@ -82,6 +101,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class DomoClimateEntity(ClimateEntity):
     """Base climate entity for ETI Domo thermostats."""
 
+    _unrecorded_attributes = frozenset({"profile_by_day", "thermal_profile_schedule"})
+
     def __init__(self, hass, thermostat: DomoThermostat, entry_id: str):
         """Initialize the climate entity."""
         self.hass = hass
@@ -92,7 +113,7 @@ class DomoClimateEntity(ClimateEntity):
         self._attr_name = thermostat.name
         self._attr_should_poll = False
 
-        self._attr_temperature_unit = UnitOfTemperature.CELSIUS
+        self._attr_native_temperature_unit = UnitOfTemperature.CELSIUS
         self._attr_target_temperature_step = 0.1
         self._attr_precision = 0.1
 
@@ -136,7 +157,7 @@ class DomoClimateEntity(ClimateEntity):
         return features
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         """Return the current temperature."""
         return self._thermostat.current_temperature
 
@@ -146,7 +167,7 @@ class DomoClimateEntity(ClimateEntity):
         return self._thermostat.current_humidity
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         """Return the target temperature."""
         if self.hvac_mode == HVACMode.AUTO:
             return self._thermostat.scheduled_setpoint
@@ -221,16 +242,24 @@ class DomoClimateEntity(ClimateEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes."""
+        f3a_attributes = {
+            "window_open": self._thermostat.is_window_open,
+            "occupied": self._thermostat.is_occupied,
+        }
         return {
             "act_id": self._thermostat.act_id,
             "zone": self._thermostat.zone,
             "room": self._thermostat.room,
-            "window_open": self._thermostat.is_window_open,
-            "occupied": self._thermostat.is_occupied,
+            **{key: value for key, value in f3a_attributes.items() if value is not None},
             "mode": self._thermostat.hvac_mode,
             "status": self._thermostat.status,
             "thermal_profile_schedule": self._thermostat.thermal_profile_schedule,
             "scheduled_setpoint": self._thermostat.scheduled_setpoint,
+            "profile_by_day": {
+                PROFILE_ID_TO_DAY[profile_id]: raw
+                for profile_id, raw in self._thermostat.profile_raw_by_day.items()
+                if profile_id in PROFILE_ID_TO_DAY
+            },
         }
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
@@ -262,6 +291,12 @@ class DomoClimateEntity(ClimateEntity):
             return
 
         await self._thermostat.async_set_temperature(temperature)
+
+    async def async_set_thermal_profile(self, day: str, profile: str) -> None:
+        """Write the 96-character thermal profile of one day (or Jolly)."""
+        if not await self._thermostat.async_write_raw_profile(PROFILE_DAY_TO_ID[day], profile):
+            raise HomeAssistantError("Thermostat not ready: thermal profile not written")
+        self.async_write_ha_state()
 
     async def async_added_to_hass(self) -> None:
         """Run when the entity is added to Home Assistant."""

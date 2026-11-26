@@ -10,6 +10,47 @@
 ---
 # CHANGELOG:
 
+## [2.3.0] - 2026-11-26
+
+### 🚀 Features
+
+- **Two new thermostat cards, already included in the integration.** After installing, you can find them directly in the "Add card" menu.
+  - **Domo Thermostat**: the same thermostat card as Home Assistant, plus the extra features of Home Sapiens Assistant.
+  - **Domo Thermostat Minimal**: the compact version, with the mode buttons. Tap it to open the full view.
+  
+![cards](images/thermo_card1.png)
+
+- **Jolly mode** among the thermostat modes. When it is active, the dial ring turns yellow. In the compact card the Jolly button can be hidden from the card settings.
+
+![cards](images/thermo_card3.png)
+
+- **Full view** of the thermostat, with compact buttons for mode (Auto, Jolly, Man, Off), schedule (Crono) and fan. The fan button shows the speed in its icon and appears only when the thermostat is on.
+
+![cards](images/thermo_card4.png)
+
+- **Thermostat schedule** editable directly from the card:
+  - 24-hour dial with the three temperature levels (T1, T2 and T3), one ring each, with the current hour highlighted;
+  - tap the day in the centre to choose another one;
+  - magnifier to edit one hour at a time, in 15-minute steps, with the same look as the dial;
+  - copy of a day's schedule to other days;
+  - editing of the T1, T2 and T3 temperatures from the card.
+  
+![cards](images/thermo_card.png)
+
+- **Warning icons** in both cards: window open and person absent, in red and shown only when needed.
+- Cards available in six languages: Italian, English, German, Spanish, French and Russian.
+
+### 🐛 Bug Fixes
+
+#### Thermostats - Attributes
+
+- Presence and open window information now appears only when the thermostat actually reports it.
+Rooms without this data no longer show a false "room not occupied" or "window closed" status.
+
+#### Fix deprecated current_temperature in DomoClimateEntity
+
+- Updated temperature property names in thermostat entities (native_current_temperature, native_target_temperature, _attr_native_temperature_unit) for compatibility with Home Assistant 2026.11 and later.
+
 ## [2.2.1] - 2026-11-08
 
 ### ✨ Improvements

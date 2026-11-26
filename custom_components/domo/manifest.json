@@ -3,10 +3,11 @@
   "name": "Home Sapiens Assistant",
   "codeowners": ["@odoricof"],
   "config_flow": true,
+  "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/odoricof/Home-Sapiens-Assistant",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/odoricof/Home-Sapiens-Assistant/issues",
   "loggers": ["custom_components.domo"],
-  "version": "2.2.1"
+  "version": "2.3.0"
 }

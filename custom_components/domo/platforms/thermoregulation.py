@@ -414,8 +414,9 @@ class DomoThermostat:
         self._room = room
 
         self._hygro = thermo_data.get("hygro")
-        self._f3a_window_open = thermo_data.get("f3a", {}).get("window_open", 0) == 1
-        self._f3a_presence = thermo_data.get("f3a", {}).get("presence", 0) == 1
+        self._f3a_window_open: Optional[bool] = None
+        self._f3a_presence: Optional[bool] = None
+        self._apply_f3a(thermo_data.get("f3a"))
         self._t1 = thermo_data.get("t1")
         self._t2 = thermo_data.get("t2")
         self._t3 = thermo_data.get("t3")
@@ -515,13 +516,13 @@ class DomoThermostat:
         return fan_map.get(self._fan_speed, "auto")
 
     @property
-    def is_window_open(self) -> bool:
-        """Returns True if an open window is detected."""
+    def is_window_open(self) -> Optional[bool]:
+        """Returns True if an open window is detected, or None if not reported by the thermostat."""
         return self._f3a_window_open
 
     @property
-    def is_occupied(self) -> bool:
-        """Returns True if presence is detected."""
+    def is_occupied(self) -> Optional[bool]:
+        """Returns True if presence is detected, or None if not reported by the thermostat."""
         return self._f3a_presence
 
     @property
@@ -866,6 +867,15 @@ class DomoThermostat:
         await self._gateway.tx_command(payload, resp_command=None)
         return True
 
+    def _apply_f3a(self, f3a: Optional[Dict[str, Any]]) -> None:
+        """Updates window and presence states, only for the keys actually reported."""
+        if not f3a:
+            return
+        if "window_open" in f3a:
+            self._f3a_window_open = f3a["window_open"] == 1
+        if "presence" in f3a:
+            self._f3a_presence = f3a["presence"] == 1
+
     def _apply_profile_info(self, profile_info: Dict[str, Any]) -> None:
         """Updates profile_info, selected day, and draft."""
         self._profile_info = profile_info
@@ -913,9 +923,7 @@ class DomoThermostat:
             if hygro is not None and 0 <= hygro <= 100:
                 self._hygro = hygro
         if "f3a" in data:
-            f3a = data["f3a"]
-            self._f3a_window_open = f3a.get("window_open", 0) == 1
-            self._f3a_presence = f3a.get("presence", 0) == 1
+            self._apply_f3a(data["f3a"])
         if "profile_info" in data:
             self._apply_profile_info(data.get("profile_info") or {})
         if "t1" in data:

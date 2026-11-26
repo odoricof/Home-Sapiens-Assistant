@@ -10,6 +10,47 @@
 ---
 # CHANGELOG:
 
+## [2.3.0] - 2026-11-26
+
+### 🚀 Features
+
+- **Due nuove card per i termostati, già incluse nell'integrazione.** Dopo l'installazione le trovi direttamente nel menu "Aggiungi scheda".
+  - **Domo Thermostat**: la stessa card termostato di Home Assistant, con in più le funzioni di Home Sapiens Assistant.
+  - **Domo Thermostat Minimal**: la versione compatta, con i pulsanti delle modalità. Toccandola si apre la vista completa.
+  
+![cards](images/thermo_card1.png)
+ 
+- **Modalità Jolly** tra le modalità del termostato. Quando è attiva, la ghiera diventa gialla. Nella card compatta il pulsante Jolly si può nascondere dalle impostazioni della card.
+
+![cards](images/thermo_card3.png)
+ 
+- **Vista completa** del termostato, con pulsanti compatti per modalità (Auto, Jolly, Man, Off), programmazione (Crono) e ventola. Il pulsante della ventola mostra la velocità nell'icona e compare solo quando il termostato è acceso.
+
+![cards](images/thermo_card4.png)
+
+- **Programmazione del cronotermostato** direttamente dalla card:
+  - quadrante a 24 ore con i tre livelli di temperatura (T1, T2 e T3), un anello ciascuno, con l'ora attuale evidenziata;
+  - toccando il giorno al centro scegli un altro giorno;
+  - lente per modificare un'ora alla volta, a passi di 15 minuti, con lo stesso aspetto del quadrante;
+  - copia della programmazione di un giorno sugli altri;
+  - modifica delle temperature T1, T2 e T3 dalla card;
+  
+![cards](images/thermo_card.png)
+
+- **Icone di avviso** in entrambe le card: finestra aperta e persona assente, in rosso e visibili solo quando serve.
+- Card disponibili in sei lingue: italiano, inglese, tedesco, spagnolo, francese e russo.
+
+### 🐛 Bug Fixes
+
+#### Termostati - Extra attributi
+
+- Le informazioni su presenza e finestra aperta ora compaiono solo se il termostato le comunica.
+Nelle stanze senza questi dati non viene più mostrato un falso "stanza non occupata" o "finestra chiusa".
+
+#### Fix current_temperature deprecato in DomoClimateEntity
+
+- Aggiornati i nomi delle temperature nelle entità termostato (native_current_temperature, native_target_temperature, _attr_native_temperature_unit) per la compatibilità con Home Assistant 2026.11 e successive.
+
 ## [2.2.1] - 2026-11-08
 
 ### ✨ Improvements

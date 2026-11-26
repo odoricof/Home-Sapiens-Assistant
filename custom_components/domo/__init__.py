@@ -17,8 +17,11 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.typing import ConfigType
 
+from .cards import async_register_cards
 from .const import CONF_PENDING, DOMAIN, PLATFORMS, SIGNAL_GATEWAY_ONLINE
 from .gateway import DomoGateway
 from .platforms.activations import discover_activations, handle_activation_status_update, refresh_all_activations
@@ -39,6 +42,18 @@ from .services.logger_security_events import SecurityEventsLogger
 from .services.notifications import async_register_notification_services
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+# ============================================================
+# ===== SETUP (once per Home Assistant start) =====
+# ============================================================
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the dashboard cards shipped with the integration."""
+    await async_register_cards(hass)
+    return True
 
 
 # ============================================================

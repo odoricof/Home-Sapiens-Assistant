@@ -46,6 +46,7 @@ Currently supported:
    - Thermal profile management
    - Copy/paste thermal profiles
    - Exposure and management of all configurable parameters
+   - Custom cards
 
 - Digital inputs
    - Value exposure

@@ -46,6 +46,7 @@ Attualmente supportati:
    - Gestione profili termici
    - Copia/incolla profili termici
    - Esposizione e gestione di tutti i parametri configurabili
+   - Schede personalizzate
 
 - Ingressi digitali
    - Esposizione valore
